@@ -1,0 +1,11 @@
+/target/
+*.class
+*.jar
+*.war
+*.ear
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.env

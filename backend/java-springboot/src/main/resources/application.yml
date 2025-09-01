@@ -1,0 +1,63 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    session:
+      cookie:
+        name: KINTAI_SESSION
+        max-age: 600
+        secure: false
+        http-only: true
+
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/kintai_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Tokyo}
+    username: ${DATABASE_USERNAME:root}
+    password: ${DATABASE_PASSWORD:password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Tokyo
+
+  session:
+    store-type: jdbc
+    timeout: 600
+    jdbc:
+      initialize-schema: always
+      table-name: SPRING_SESSION
+
+  jackson:
+    time-zone: Asia/Tokyo
+    date-format: yyyy-MM-dd HH:mm:ss
+
+logging:
+  level:
+    com.kintai: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+kintai:
+  security:
+    session-timeout: 600
+  
+  fastapi:
+    url: ${FASTAPI_URL:http://localhost:8081}
+    
+  working:
+    start-time: "09:00"
+    end-time: "18:00"
+    lunch-start: "12:00"
+    lunch-end: "13:00"
+    night-start: "22:00"
+    night-end: "05:00"

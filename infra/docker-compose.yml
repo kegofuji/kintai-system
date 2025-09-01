@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Java Spring Bootアプリケーション
+  backend-java:
+    build:
+      context: ../
+      dockerfile: infra/Dockerfile
+      target: java-builder
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/kintai_db
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=password
+    depends_on:
+      - db
+
+  # Python FastAPIアプリケーション
+  backend-python:
+    build:
+      context: ../
+      dockerfile: infra/Dockerfile
+      target: python-builder
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../backend/python-fastapi:/app
+
+  # フロントエンド
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ../frontend/public_ui:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend-java
+      - backend-python
+
+  # データベース
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=kintai_db
+      - MYSQL_ROOT_PASSWORD=password
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
