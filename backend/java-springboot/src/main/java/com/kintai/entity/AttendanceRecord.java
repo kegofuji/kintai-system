@@ -8,10 +8,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "attendance_records", indexes = {
-    @Index(name = "idx_employee_date", columnList = "employee_id, attendance_date", unique = true),
-    @Index(name = "idx_attendance_date", columnList = "attendance_date")
-})
+@Table(name = "attendance_records", 
+       indexes = {
+           @Index(name = "idx_employee_date", columnList = "employee_id, attendance_date"),
+           @Index(name = "idx_attendance_date", columnList = "attendance_date")
+       })
 public class AttendanceRecord {
     
     @Id
@@ -47,21 +48,20 @@ public class AttendanceRecord {
     @Column(name = "attendance_status", nullable = false)
     private AttendanceStatus attendanceStatus = AttendanceStatus.normal;
     
-    @Column(name = "submission_status", nullable = false)
+    @Column(name = "submission_status", nullable = false, length = 10)
     private String submissionStatus = "未提出";
     
     @Column(name = "attendance_fixed_flag", nullable = false)
     private Boolean attendanceFixedFlag = false;
     
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
     
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
-    // Constructors
     public AttendanceRecord() {}
     
     public AttendanceRecord(Long employeeId, LocalDate attendanceDate) {
@@ -120,7 +120,6 @@ public class AttendanceRecord {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     
-    // Enum
     public enum AttendanceStatus {
         normal, paid_leave, absent
     }

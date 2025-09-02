@@ -16,22 +16,19 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     
     Optional<Employee> findByEmail(String email);
     
-    List<Employee> findByEmploymentStatus(Employee.EmploymentStatus employmentStatus);
-    
-    @Query("SELECT e FROM Employee e WHERE " +
-           "(e.employeeName LIKE %:keyword% OR e.employeeCode LIKE %:keyword%) " +
-           "AND (:status IS NULL OR e.employmentStatus = :status) " +
-           "ORDER BY e.employeeCode")
-    List<Employee> findByKeywordAndStatus(@Param("keyword") String keyword, 
-                                        @Param("status") Employee.EmploymentStatus status);
-    
     boolean existsByEmployeeCode(String employeeCode);
     
     boolean existsByEmail(String email);
     
-    @Query("SELECT e FROM Employee e WHERE e.employmentStatus = 'active' ORDER BY e.employeeCode")
-    List<Employee> findActiveEmployees();
+    @Query("SELECT e FROM Employee e WHERE e.employmentStatus = :status")
+    List<Employee> findByEmploymentStatus(@Param("status") Employee.EmploymentStatus status);
     
-    @Query("SELECT COUNT(e) FROM Employee e WHERE e.employmentStatus = 'active'")
-    long countActiveEmployees();
+    @Query("SELECT e FROM Employee e WHERE " +
+           "(e.employeeName LIKE %:keyword% OR e.employeeCode LIKE %:keyword%) " +
+           "AND (:status IS NULL OR e.employmentStatus = :status)")
+    List<Employee> searchEmployees(@Param("keyword") String keyword, 
+                                  @Param("status") Employee.EmploymentStatus status);
+    
+    @Query("SELECT e FROM Employee e WHERE e.employeeRole = :role")
+    List<Employee> findByEmployeeRole(@Param("role") Employee.EmployeeRole role);
 }

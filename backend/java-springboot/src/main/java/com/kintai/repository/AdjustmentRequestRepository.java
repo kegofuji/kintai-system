@@ -8,35 +8,28 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AdjustmentRequestRepository extends JpaRepository<AdjustmentRequest, Long> {
     
     List<AdjustmentRequest> findByEmployeeId(Long employeeId);
     
-    @Query("SELECT ar FROM AdjustmentRequest ar WHERE ar.employeeId = :employeeId " +
-           "ORDER BY ar.adjustmentTargetDate DESC, ar.createdAt DESC")
-    List<AdjustmentRequest> findByEmployeeIdOrderByDateDesc(@Param("employeeId") Long employeeId);
+    List<AdjustmentRequest> findByAdjustmentStatus(String status);
     
-    List<AdjustmentRequest> findByAdjustmentStatus(String adjustmentStatus);
+    Optional<AdjustmentRequest> findByEmployeeIdAndAdjustmentTargetDate(
+        Long employeeId, LocalDate targetDate);
     
     @Query("SELECT ar FROM AdjustmentRequest ar WHERE " +
-           "(:status IS NULL OR ar.adjustmentStatus = :status) " +
-           "AND (:employeeId IS NULL OR ar.employeeId = :employeeId) " +
-           "ORDER BY ar.createdAt DESC")
-    List<AdjustmentRequest> findByStatusAndEmployee(@Param("status") String status, 
-                                                   @Param("employeeId") Long employeeId);
+           "(:employeeId IS NULL OR ar.employeeId = :employeeId) " +
+           "AND (:status IS NULL OR ar.adjustmentStatus = :status)")
+    List<AdjustmentRequest> findAdjustmentRequestsWithFilters(
+        @Param("employeeId") Long employeeId, 
+        @Param("status") String status);
     
-    boolean existsByEmployeeIdAndAdjustmentTargetDate(Long employeeId, LocalDate adjustmentTargetDate);
-    
-    @Query("SELECT ar FROM AdjustmentRequest ar " +
-           "JOIN Employee e ON ar.employeeId = e.employeeId " +
-           "WHERE (:status IS NULL OR ar.adjustmentStatus = :status) " +
-           "AND (:employeeId IS NULL OR ar.employeeId = :employeeId) " +
-           "ORDER BY ar.createdAt DESC")
-    List<AdjustmentRequest> findRequestsWithEmployeeInfo(@Param("status") String status,
-                                                        @Param("employeeId") Long employeeId);
-    
-    @Query("SELECT COUNT(ar) FROM AdjustmentRequest ar WHERE ar.adjustmentStatus = '未処理'")
-    long countPendingRequests();
+    @Query("SELECT ar FROM AdjustmentRequest ar WHERE " +
+           "ar.adjustmentTargetDate BETWEEN :startDate AND :endDate")
+    List<AdjustmentRequest> findByAdjustmentTargetDateBetween(
+        @Param("startDate") LocalDate startDate, 
+        @Param("endDate") LocalDate endDate);
 }

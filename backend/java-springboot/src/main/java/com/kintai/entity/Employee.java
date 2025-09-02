@@ -8,10 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "employees", indexes = {
-    @Index(name = "idx_employee_code", columnList = "employee_code", unique = true),
-    @Index(name = "idx_employee_email", columnList = "email", unique = true)
-})
+@Table(name = "employees")
 public class Employee {
     
     @Id
@@ -28,7 +25,7 @@ public class Employee {
     @Column(name = "email", nullable = false, unique = true, length = 100)
     private String email;
     
-    @Column(name = "employee_password_hash", nullable = false, length = 255)
+    @Column(name = "employee_password_hash", nullable = false)
     private String employeePasswordHash;
     
     @Enumerated(EnumType.STRING)
@@ -49,14 +46,13 @@ public class Employee {
     private Integer paidLeaveRemainingDays = 10;
     
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
     
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
-    // Constructors
     public Employee() {}
     
     public Employee(String employeeCode, String employeeName, String email, 
@@ -112,7 +108,6 @@ public class Employee {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     
-    // Enums
     public enum EmployeeRole {
         employee, admin
     }

@@ -8,11 +8,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "adjustment_requests", indexes = {
-    @Index(name = "idx_employee_target_date", columnList = "employee_id, adjustment_target_date"),
-    @Index(name = "idx_target_date", columnList = "adjustment_target_date"),
-    @Index(name = "idx_adjustment_status", columnList = "adjustment_status")
-})
+@Table(name = "adjustment_requests",
+       indexes = {
+           @Index(name = "idx_employee_target_date", columnList = "employee_id, adjustment_target_date"),
+           @Index(name = "idx_target_date", columnList = "adjustment_target_date"),
+           @Index(name = "idx_status", columnList = "adjustment_status")
+       })
 public class AdjustmentRequest {
     
     @Id
@@ -41,7 +42,7 @@ public class AdjustmentRequest {
     @Column(name = "adjustment_reason", nullable = false, length = 200)
     private String adjustmentReason;
     
-    @Column(name = "adjustment_status", nullable = false)
+    @Column(name = "adjustment_status", nullable = false, length = 10)
     private String adjustmentStatus = "未処理";
     
     @Column(name = "approved_by_employee_id")
@@ -54,14 +55,13 @@ public class AdjustmentRequest {
     private String rejectionReason;
     
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
     
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
-    // Constructors
     public AdjustmentRequest() {}
     
     public AdjustmentRequest(Long employeeId, LocalDate adjustmentTargetDate, 

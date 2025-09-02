@@ -8,11 +8,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "leave_requests", indexes = {
-    @Index(name = "idx_employee_leave_date", columnList = "employee_id, leave_request_date"),
-    @Index(name = "idx_leave_date", columnList = "leave_request_date"),
-    @Index(name = "idx_status", columnList = "leave_request_status")
-})
+@Table(name = "leave_requests",
+       indexes = {
+           @Index(name = "idx_employee_leave_date", columnList = "employee_id, leave_request_date"),
+           @Index(name = "idx_leave_date", columnList = "leave_request_date"),
+           @Index(name = "idx_status", columnList = "leave_request_status")
+       })
 public class LeaveRequest {
     
     @Id
@@ -29,7 +30,7 @@ public class LeaveRequest {
     @Column(name = "leave_request_reason", nullable = false, length = 200)
     private String leaveRequestReason;
     
-    @Column(name = "leave_request_status", nullable = false)
+    @Column(name = "leave_request_status", nullable = false, length = 10)
     private String leaveRequestStatus = "未処理";
     
     @Column(name = "approved_by_employee_id")
@@ -39,14 +40,13 @@ public class LeaveRequest {
     private LocalDateTime approvedAt;
     
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at")
     private LocalDateTime createdAt;
     
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
-    // Constructors
     public LeaveRequest() {}
     
     public LeaveRequest(Long employeeId, LocalDate leaveRequestDate, String leaveRequestReason) {

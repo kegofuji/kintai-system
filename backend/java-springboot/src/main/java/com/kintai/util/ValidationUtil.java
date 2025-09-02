@@ -1,177 +1,103 @@
 package com.kintai.util;
 
-import com.kintai.exception.ValidationException;
-import org.springframework.stereotype.Component;
-
-import java.time.LocalDate;
-import java.util.*;
 import java.util.regex.Pattern;
 
-@Component
 public class ValidationUtil {
     
-    private static final Pattern EMAIL_PATTERN = Pattern.compile(
-        "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
-    );
-    
     private static final Pattern EMPLOYEE_CODE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{3,10}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,20}$");
     
-    private static final Set<String> WEAK_PASSWORDS = Set.of(
-        "password", "123456", "password123", "admin", "qwerty", "abc123"
-    );
+    /**
+     * パスワード詳細バリデーション
+     */
+    public static boolean isValidPassword(String password, String employeeCode) {
+        if (password == null || password.length() < 8 || password.length() > 20) {
+            return false;
+        }
+        
+        // 英字（大文字・小文字）、数字、記号を各1文字以上含む
+        if (!PASSWORD_PATTERN.matcher(password).matches()) {
+            return false;
+        }
+        
+        // 連続する同一文字3文字以上禁止
+        for (int i = 0; i < password.length() - 2; i++) {
+            if (password.charAt(i) == password.charAt(i + 1) && 
+                password.charAt(i + 1) == password.charAt(i + 2)) {
+                return false;
+            }
+        }
+        
+        // 社員IDと同一文字列禁止
+        if (employeeCode != null && password.contains(employeeCode)) {
+            return false;
+        }
+        
+        // よくあるパスワード禁止
+        String[] commonPasswords = {
+            "password", "123456", "123456789", "qwerty", "abc123",
+            "password123", "admin", "login", "welcome"
+        };
+        String lowerPassword = password.toLowerCase();
+        for (String common : commonPasswords) {
+            if (lowerPassword.contains(common)) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
     
     /**
      * 社員コードバリデーション
      */
-    public void validateEmployeeCode(String employeeCode) {
-        Map<String, List<String>> errors = new HashMap<>();
-        
-        if (employeeCode == null || employeeCode.trim().isEmpty()) {
-            errors.put("employeeCode", List.of("社員コードは必須です"));
-        } else if (!EMPLOYEE_CODE_PATTERN.matcher(employeeCode).matches()) {
-            errors.put("employeeCode", List.of("社員コードは3-10文字の半角英数字で入力してください"));
-        }
-        
-        if (!errors.isEmpty()) {
-            throw new ValidationException("社員コードが不正です", errors);
-        }
-    }
-    
-    /**
-     * パスワードバリデーション
-     */
-    public void validatePassword(String password, String employeeCode) {
-        Map<String, List<String>> errors = new HashMap<>();
-        List<String> passwordErrors = new ArrayList<>();
-        
-        if (password == null || password.length() < 8 || password.length() > 20) {
-            passwordErrors.add("パスワードは8-20文字で入力してください");
-        } else {
-            // 英字、数字、記号を各1文字以上含む
-            boolean hasUpper = password.matches(".*[A-Z].*");
-            boolean hasLower = password.matches(".*[a-z].*");
-            boolean hasDigit = password.matches(".*\\d.*");
-            boolean hasSymbol = password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
-            
-            if (!hasUpper || !hasLower || !hasDigit || !hasSymbol) {
-                passwordErrors.add("パスワードは英字（大文字・小文字）、数字、記号を各1文字以上含めてください");
-            }
-            
-            // 連続する同一文字3文字以上禁止
-            for (int i = 0; i < password.length() - 2; i++) {
-                if (password.charAt(i) == password.charAt(i + 1) && 
-                    password.charAt(i + 1) == password.charAt(i + 2)) {
-                    passwordErrors.add("連続する同一文字は3文字以上使用できません");
-                    break;
-                }
-            }
-            
-            // 社員IDと同一文字列禁止
-            if (employeeCode != null && password.equals(employeeCode)) {
-                passwordErrors.add("パスワードは社員コードと異なる文字列にしてください");
-            }
-            
-            // よくあるパスワード禁止
-            if (WEAK_PASSWORDS.contains(password.toLowerCase())) {
-                passwordErrors.add("より安全なパスワードを設定してください");
-            }
-        }
-        
-        if (!passwordErrors.isEmpty()) {
-            errors.put("password", passwordErrors);
-            throw new ValidationException("パスワードが不正です", errors);
-        }
+    public static boolean isValidEmployeeCode(String employeeCode) {
+        return employeeCode != null && EMPLOYEE_CODE_PATTERN.matcher(employeeCode).matches();
     }
     
     /**
      * メールアドレスバリデーション
      */
-    public void validateEmail(String email) {
-        Map<String, List<String>> errors = new HashMap<>();
-        
-        if (email == null || email.trim().isEmpty()) {
-            errors.put("email", List.of("メールアドレスは必須です"));
-        } else if (email.length() > 100) {
-            errors.put("email", List.of("メールアドレスは100文字以内で入力してください"));
-        } else if (!EMAIL_PATTERN.matcher(email).matches()) {
-            errors.put("email", List.of("正しいメールアドレス形式で入力してください"));
-        }
-        
-        if (!errors.isEmpty()) {
-            throw new ValidationException("メールアドレスが不正です", errors);
-        }
+    public static boolean isValidEmail(String email) {
+        return email != null && EMAIL_PATTERN.matcher(email).matches();
     }
     
     /**
-     * 必須項目バリデーション
+     * パスワード要件エラーメッセージ生成
      */
-    public void validateRequired(String value, String fieldName) {
-        if (value == null || value.trim().isEmpty()) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は必須です"));
-            throw new ValidationException("必須項目が未入力です", errors);
-        }
-    }
-    
-    /**
-     * 文字列長バリデーション
-     */
-    public void validateMaxLength(String value, int maxLength, String fieldName) {
-        if (value != null && value.length() > maxLength) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は" + maxLength + "文字以内で入力してください"));
-            throw new ValidationException("文字数上限を超過しています", errors);
-        }
-    }
-    
-    /**
-     * 未来日バリデーション
-     */
-    public void validateFutureDate(LocalDate date, String fieldName) {
-        if (date == null) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は必須です"));
-            throw new ValidationException("日付が未入力です", errors);
+    public static String getPasswordValidationMessage(String password, String employeeCode) {
+        if (password == null || password.length() < 8 || password.length() > 20) {
+            return "パスワードは8-20文字で入力してください";
         }
         
-        if (!date.isAfter(LocalDate.now())) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は明日以降の日付を選択してください"));
-            throw new ValidationException("日付が不正です", errors);
-        }
-    }
-    
-    /**
-     * 過去日または当日バリデーション
-     */
-    public void validatePastOrTodayDate(LocalDate date, String fieldName) {
-        if (date == null) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は必須です"));
-            throw new ValidationException("日付が未入力です", errors);
+        if (!password.matches(".*[a-z].*")) {
+            return "パスワードには小文字を1文字以上含めてください";
         }
         
-        if (date.isAfter(LocalDate.now())) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は今日または過去の日付を選択してください"));
-            throw new ValidationException("日付が不正です", errors);
-        }
-    }
-    
-    /**
-     * 数値範囲バリデーション
-     */
-    public void validateRange(Integer value, int min, int max, String fieldName) {
-        if (value == null) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は必須です"));
-            throw new ValidationException("数値が未入力です", errors);
+        if (!password.matches(".*[A-Z].*")) {
+            return "パスワードには大文字を1文字以上含めてください";
         }
         
-        if (value < min || value > max) {
-            Map<String, List<String>> errors = new HashMap<>();
-            errors.put(fieldName, List.of(fieldName + "は" + min + "～" + max + "の範囲で入力してください"));
-            throw new ValidationException("数値範囲が不正です", errors);
+        if (!password.matches(".*\\d.*")) {
+            return "パスワードには数字を1文字以上含めてください";
         }
+        
+        if (!password.matches(".*[@$!%*?&].*")) {
+            return "パスワードには記号(@$!%*?&)を1文字以上含めてください";
+        }
+        
+        for (int i = 0; i < password.length() - 2; i++) {
+            if (password.charAt(i) == password.charAt(i + 1) && 
+                password.charAt(i + 1) == password.charAt(i + 2)) {
+                return "パスワードに同一文字を3文字以上連続で使用することはできません";
+            }
+        }
+        
+        if (employeeCode != null && password.contains(employeeCode)) {
+            return "パスワードに社員IDを含めることはできません";
+        }
+        
+        return null;
     }
 }
