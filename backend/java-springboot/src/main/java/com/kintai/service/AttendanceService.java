@@ -2,6 +2,7 @@ package com.kintai.service;
 
 import com.kintai.entity.AttendanceRecord;
 import com.kintai.entity.Employee;
+import com.kintai.exception.BusinessException;
 import com.kintai.repository.AttendanceRecordRepository;
 import com.kintai.repository.EmployeeRepository;
 import com.kintai.util.DateUtil;
@@ -38,7 +39,7 @@ public class AttendanceService {
                 attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, today);
         
         if (existingRecord.isPresent() && existingRecord.get().getClockInTime() != null) {
-            throw new RuntimeException("ALREADY_CLOCKED_IN");
+            throw new BusinessException("ALREADY_CLOCKED_IN", "本日は既に出勤打刻済みです");
         }
         
         AttendanceRecord record;
@@ -67,14 +68,14 @@ public class AttendanceService {
         // 出勤記録チェック
         AttendanceRecord record = attendanceRecordRepository
                 .findByEmployeeIdAndAttendanceDate(employeeId, today)
-                .orElseThrow(() -> new RuntimeException("NOT_CLOCKED_IN"));
+                .orElseThrow(() -> new BusinessException("NOT_CLOCKED_IN", "出勤打刻が必要です"));
         
         if (record.getClockInTime() == null) {
-            throw new RuntimeException("NOT_CLOCKED_IN");
+            throw new BusinessException("NOT_CLOCKED_IN", "出勤打刻が必要です");
         }
         
         if (record.getClockOutTime() != null) {
-            throw new RuntimeException("ALREADY_CLOCKED_OUT");
+            throw new BusinessException("ALREADY_CLOCKED_OUT", "本日は既に退勤打刻済みです");
         }
         
         record.setClockOutTime(clockOutTime);
@@ -141,7 +142,7 @@ public class AttendanceService {
                     .orElse(null);
             
             if (record == null) {
-                throw new RuntimeException("INCOMPLETE_ATTENDANCE");
+                throw new BusinessException("INCOMPLETE_ATTENDANCE", "打刻漏れがあります: " + workingDay);
             }
             
             // 有給取得日は除外
@@ -151,7 +152,8 @@ public class AttendanceService {
             
             // 通常勤務日の場合、出勤・退勤時刻が必須
             if (record.getClockInTime() == null || record.getClockOutTime() == null) {
-                throw new RuntimeException("INCOMPLETE_ATTENDANCE");
+                throw new BusinessException("INCOMPLETE_ATTENDANCE", 
+                    "出勤または退勤の打刻が不足しています: " + workingDay);
             }
         }
         
@@ -163,7 +165,7 @@ public class AttendanceService {
                         AttendanceRecord.AttendanceStatus.absent);
         
         if (!absentRecords.isEmpty()) {
-            throw new RuntimeException("INCOMPLETE_ATTENDANCE");
+            throw new BusinessException("INCOMPLETE_ATTENDANCE", "欠勤日があるため申請できません");
         }
     }
     
@@ -207,11 +209,11 @@ public class AttendanceService {
                                                  LocalDateTime clockInTime, 
                                                  LocalDateTime clockOutTime) {
         AttendanceRecord record = attendanceRecordRepository.findById(attendanceId)
-                .orElseThrow(() -> new RuntimeException("ATTENDANCE_NOT_FOUND"));
+                .orElseThrow(() -> new BusinessException("ATTENDANCE_NOT_FOUND", "勤怠記録が見つかりません"));
         
         // 確定済みチェック
         if (record.getAttendanceFixedFlag()) {
-            throw new RuntimeException("FIXED_ATTENDANCE");
+            throw new BusinessException("FIXED_ATTENDANCE", "確定済みのため変更できません");
         }
         
         record.setClockInTime(clockInTime);
