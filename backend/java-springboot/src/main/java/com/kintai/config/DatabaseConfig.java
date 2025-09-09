@@ -1,12 +1,12 @@
 package com.kintai.config;
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.session.jdbc.config.annotation.web.http.EnableJdbcHttpSession;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
-@EnableJdbcHttpSession(maxInactiveIntervalInSeconds = 600) // 10分
+@EnableJpaAuditing
+@EnableTransactionManagement
 public class DatabaseConfig {
-    
-    // JDBCセッション設定は@EnableJdbcHttpSessionで自動構成
+    // JPA設定は application.yml で管理
 }

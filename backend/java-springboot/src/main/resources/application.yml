@@ -1,35 +1,214 @@
-server:
-  port: 8080
-
 spring:
-  datasource:
-    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&serverTimezone=Asia/Tokyo&allowPublicKeyRetrieval=true}
-    username: ${DATABASE_USERNAME:root}
-    password: ${DATABASE_PASSWORD:password}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+  application:
+    name: kintai-system
 
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8}
+    username: ${DATABASE_USERNAME:kintai_user}
+    password: ${DATABASE_PASSWORD:kintai_password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+  # JPA Configuration  
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+        show_sql: false
+        use_sql_comments: true
+        timezone: Asia/Tokyo
+    show-sql: false
+    
+  # Session Configuration
+  session:
+    store-type: none
+    timeout: 10m
+    
+  # Security Configuration
+  security:
+    user:
+      name: admin
+      password: admin123
+      roles: ADMIN
+      
+  # Web Configuration
+  web:
+    resources:
+      static-locations: classpath:/static/
+      cache:
+        period: 3600
+        
+  # Jackson Configuration (JSON)
+  jackson:
+    time-zone: Asia/Tokyo
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+      
+  # Validation Configuration
+  validation:
+    enabled: true
+
+# Server Configuration
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /
+    session:
+      timeout: 10m
+      cookie:
+        name: KINTAI_SESSION
+        secure: false
+        http-only: true
+        same-site: lax
+        max-age: 600
+        
+  # Error Configuration
+  error:
+    whitelabel:
+      enabled: false
+    include-stacktrace: never
+    include-message: always
+
+# Logging Configuration
+logging:
+  level:
+    com.kintai: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/kintai-system.log
+    max-size: 10MB
+    max-history: 30
+
+# Management Configuration (Actuator)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+      
+# Custom Application Properties
+kintai:
+  # 勤怠管理設定
+  attendance:
+    standard-start-time: "09:00"
+    standard-end-time: "18:00" 
+    lunch-start-time: "12:00"
+    lunch-end-time: "13:00"
+    night-start-time: "22:00"
+    night-end-time: "05:00"
+    standard-working-hours: 8
+    
+  # セキュリティ設定
+  security:
+    session-timeout-minutes: 10
+    password-policy:
+      min-length: 8
+      max-length: 20
+      require-uppercase: true
+      require-lowercase: true
+      require-digit: true
+      require-symbol: true
+      
+  # FastAPI連携設定
+  fastapi:
+    base-url: ${FASTAPI_URL:http://localhost:8081}
+    pdf-endpoint: /reports/pdf
+    timeout: 30s
+    
+  # 初期データ設定
+  init:
+    create-admin: true
+    admin-code: ADMIN001
+    admin-password: AdminPass123!
+    paid-leave-initial-days: 10
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: development
+      
+  datasource:
+    url: jdbc:mysql://localhost:3306/kintai_db_dev?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8
+    
   jpa:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
-
-  session:
-    store-type: jdbc
-    timeout: 600s
-
+    
 logging:
   level:
     com.kintai: DEBUG
     org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    
+server:
+  error:
+    include-stacktrace: always
 
-kintai:
-  jwt:
-    secret: ${JWT_SECRET:mySecretKeyForKintaiSystem2025}
-    expiration: 600000
+---
+# Production Profile  
+spring:
+  config:
+    activate:
+      on-profile: production
+      
+  datasource:
+    url: ${DATABASE_URL}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    
+logging:
+  level:
+    root: WARN
+    com.kintai: INFO
+    
+server:
+  error:
+    include-stacktrace: never
 
-  fastapi:
-    url: ${FASTAPI_URL:http://localhost:8081}
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+      
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    
+  h2:
+    console:
+      enabled: true

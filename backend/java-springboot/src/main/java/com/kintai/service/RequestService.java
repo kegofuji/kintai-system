@@ -1,17 +1,8 @@
 package com.kintai.service;
 
-import com.kintai.entity.AdjustmentRequest;
-import com.kintai.entity.AttendanceRecord;
-import com.kintai.entity.LeaveRequest;
-import com.kintai.entity.Employee;
-import com.kintai.exception.BusinessException;
-import com.kintai.repository.AdjustmentRequestRepository;
-import com.kintai.repository.AttendanceRecordRepository;
-import com.kintai.repository.LeaveRequestRepository;
-import com.kintai.repository.EmployeeRepository;
+import com.kintai.entity.*;
+import com.kintai.repository.*;
 import com.kintai.util.TimeCalculator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,8 +16,6 @@ import java.util.Optional;
 @Transactional
 public class RequestService {
     
-    private static final Logger log = LoggerFactory.getLogger(RequestService.class);
-    
     @Autowired
     private LeaveRequestRepository leaveRequestRepository;
     
@@ -39,529 +28,355 @@ public class RequestService {
     @Autowired
     private EmployeeRepository employeeRepository;
     
+    @Autowired
+    private TimeCalculator timeCalculator;
+    
     /**
      * 有給申請
-     * 
-     * @param employeeId 申請者ID
-     * @param leaveDate 有給取得日（未来日）
-     * @param reason 申請理由
-     * @return 作成された有給申請エンティティ
-     * @throws BusinessException 残日数不足、重複申請、既出勤日
      */
-    public LeaveRequest submitLeaveRequest(Long employeeId, LocalDate leaveDate, String reason) {
-        log.info("有給申請開始 - employeeId: {}, leaveDate: {}, reason: {}", 
-                employeeId, leaveDate, reason);
-        
-        // 残日数チェック
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> {
-                    log.error("申請者が見つからない - employeeId: {}", employeeId);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
-        
-        if (employee.getPaidLeaveRemainingDays() <= 0) {
-            log.warn("有給残日数不足 - employeeId: {}, remainingDays: {}", 
-                    employeeId, employee.getPaidLeaveRemainingDays());
-            throw new BusinessException("INSUFFICIENT_LEAVE_DAYS", "有給残日数が不足しています");
-        }
-        
-        // 重複申請チェック
-        if (leaveRequestRepository.existsByEmployeeIdAndLeaveRequestDate(employeeId, leaveDate)) {
-            log.warn("有給申請重複 - employeeId: {}, leaveDate: {}", employeeId, leaveDate);
-            throw new BusinessException("DUPLICATE_REQUEST", "既に申請済みです");
-        }
-        
-        // 既に出勤済みの日はチェック
-        Optional<AttendanceRecord> existingAttendance = 
+    public RequestResult submitLeaveRequest(Long employeeId, LocalDate leaveDate, String reason) {
+        try {
+            // 社員存在・有給残日数チェック
+            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
+            if (employeeOpt.isEmpty()) {
+                return RequestResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            if (employee.getPaidLeaveRemainingDays() <= 0) {
+                return RequestResult.failure("INSUFFICIENT_LEAVE_DAYS", "有給残日数が不足しています");
+            }
+            
+            // 重複申請チェック
+            if (leaveRequestRepository.existsByEmployeeIdAndLeaveRequestDate(employeeId, leaveDate)) {
+                return RequestResult.failure("DUPLICATE_REQUEST", "既に申請済みです");
+            }
+            
+            // 過去日・当日チェック
+            if (!leaveDate.isAfter(LocalDate.now())) {
+                return RequestResult.failure("INVALID_DATE", "申請日は明日以降を選択してください");
+            }
+            
+            // 出勤済みチェック
+            Optional<AttendanceRecord> attendanceOpt = 
                 attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, leaveDate);
-        
-        if (existingAttendance.isPresent() && existingAttendance.get().getClockInTime() != null) {
-            log.warn("既出勤日への有給申請 - employeeId: {}, leaveDate: {}", employeeId, leaveDate);
-            throw new BusinessException("ALREADY_WORKED", "既に出勤済みの日は申請できません");
+            if (attendanceOpt.isPresent() && attendanceOpt.get().hasClockInTime()) {
+                return RequestResult.failure("ALREADY_WORKED", "既に出勤済みの日は申請できません");
+            }
+            
+            // 申請作成
+            LeaveRequest request = new LeaveRequest(employeeId, leaveDate, reason);
+            LeaveRequest saved = leaveRequestRepository.save(request);
+            
+            return RequestResult.success(saved.getLeaveRequestId(), 
+                employee.getPaidLeaveRemainingDays() - 1, "有給申請が完了しました");
+            
+        } catch (Exception e) {
+            return RequestResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
-        
-        LeaveRequest request = new LeaveRequest(employeeId, leaveDate, reason);
-        LeaveRequest savedRequest = leaveRequestRepository.save(request);
-        
-        log.info("有給申請完了 - requestId: {}, employeeId: {}, leaveDate: {}", 
-                savedRequest.getLeaveRequestId(), employeeId, leaveDate);
-        
-        return savedRequest;
-    }
-    
-    /**
-     * 有給申請承認
-     * 
-     * @param requestId 申請ID
-     * @param approverId 承認者ID
-     * @throws BusinessException 申請が見つからない、処理済み、社員が見つからない
-     */
-    public void approveLeaveRequest(Long requestId, Long approverId) {
-        log.info("有給申請承認開始 - requestId: {}, approverId: {}", requestId, approverId);
-        
-        LeaveRequest request = leaveRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("有給申請が見つからない - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        if (!"未処理".equals(request.getLeaveRequestStatus())) {
-            log.warn("有給申請既処理済み - requestId: {}, status: {}", 
-                    requestId, request.getLeaveRequestStatus());
-            throw new BusinessException("REQUEST_ALREADY_PROCESSED", "既に処理済みです");
-        }
-        
-        // 有給残日数減算
-        Employee employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> {
-                    log.error("申請者が見つからない（承認時） - employeeId: {}", request.getEmployeeId());
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
-        
-        int beforeDays = employee.getPaidLeaveRemainingDays();
-        employee.setPaidLeaveRemainingDays(beforeDays - 1);
-        employeeRepository.save(employee);
-        
-        // 勤怠記録を有給として作成
-        AttendanceRecord attendanceRecord = attendanceRecordRepository
-                .findByEmployeeIdAndAttendanceDate(request.getEmployeeId(), request.getLeaveRequestDate())
-                .orElse(new AttendanceRecord(request.getEmployeeId(), request.getLeaveRequestDate()));
-        
-        attendanceRecord.setAttendanceStatus(AttendanceRecord.AttendanceStatus.paid_leave);
-        attendanceRecordRepository.save(attendanceRecord);
-        
-        // 申請を承認済みに更新
-        request.setLeaveRequestStatus("承認");
-        request.setApprovedByEmployeeId(approverId);
-        request.setApprovedAt(LocalDateTime.now());
-        leaveRequestRepository.save(request);
-        
-        log.info("有給申請承認完了 - requestId: {}, employeeId: {}, 残日数: {}→{}", 
-                requestId, request.getEmployeeId(), beforeDays, employee.getPaidLeaveRemainingDays());
-    }
-    
-    /**
-     * 有給申請却下
-     * 
-     * @param requestId 申請ID
-     * @param approverId 承認者ID
-     * @throws BusinessException 申請が見つからない、処理済み
-     */
-    public void rejectLeaveRequest(Long requestId, Long approverId) {
-        log.info("有給申請却下開始 - requestId: {}, approverId: {}", requestId, approverId);
-        
-        LeaveRequest request = leaveRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("有給申請が見つからない（却下） - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        if (!"未処理".equals(request.getLeaveRequestStatus())) {
-            log.warn("有給申請既処理済み（却下） - requestId: {}, status: {}", 
-                    requestId, request.getLeaveRequestStatus());
-            throw new BusinessException("REQUEST_ALREADY_PROCESSED", "既に処理済みです");
-        }
-        
-        request.setLeaveRequestStatus("却下");
-        request.setApprovedByEmployeeId(approverId);
-        request.setApprovedAt(LocalDateTime.now());
-        leaveRequestRepository.save(request);
-        
-        log.info("有給申請却下完了 - requestId: {}, employeeId: {}", 
-                requestId, request.getEmployeeId());
     }
     
     /**
      * 打刻修正申請
-     * 
-     * @param employeeId 申請者ID
-     * @param targetDate 修正対象日（当日または過去日）
-     * @param correctedClockInTime 修正後出勤時刻
-     * @param correctedClockOutTime 修正後退勤時刻
-     * @param reason 修正理由
-     * @return 作成された打刻修正申請エンティティ
-     * @throws BusinessException 確定済み、重複申請
      */
-    public AdjustmentRequest submitAdjustmentRequest(Long employeeId, LocalDate targetDate, 
-                                                   LocalDateTime correctedClockInTime,
-                                                   LocalDateTime correctedClockOutTime,
-                                                   String reason) {
-        log.info("打刻修正申請開始 - employeeId: {}, targetDate: {}, reason: {}", 
-                employeeId, targetDate, reason);
-        
-        // 確定済み勤怠データはチェック
-        Optional<AttendanceRecord> attendanceOpt = 
+    public RequestResult submitAdjustmentRequest(Long employeeId, LocalDate targetDate, 
+                                               LocalDateTime correctedClockIn, LocalDateTime correctedClockOut, 
+                                               String reason) {
+        try {
+            // 社員存在チェック
+            if (!employeeRepository.existsById(employeeId)) {
+                return RequestResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            // 未来日チェック
+            if (targetDate.isAfter(LocalDate.now())) {
+                return RequestResult.failure("INVALID_DATE", "対象日は当日または過去日を選択してください");
+            }
+            
+            // 重複申請チェック（未処理のもの）
+            if (adjustmentRequestRepository.existsPendingRequestByEmployeeIdAndTargetDate(employeeId, targetDate)) {
+                return RequestResult.failure("DUPLICATE_REQUEST", "既に申請済みです");
+            }
+            
+            // 勤怠データの確定状態チェック
+            Optional<AttendanceRecord> recordOpt = 
                 attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, targetDate);
-        
-        if (attendanceOpt.isPresent() && attendanceOpt.get().getAttendanceFixedFlag()) {
-            log.warn("確定済み勤怠データへの修正申請 - employeeId: {}, targetDate: {}", 
-                    employeeId, targetDate);
-            throw new BusinessException("FIXED_ATTENDANCE", "確定済みのため変更できません");
+            if (recordOpt.isPresent() && recordOpt.get().isFixed()) {
+                return RequestResult.failure("FIXED_ATTENDANCE", "確定済みのため変更できません");
+            }
+            
+            // 申請作成
+            AdjustmentRequest request = new AdjustmentRequest(employeeId, targetDate, reason);
+            
+            // 元データを保存
+            if (recordOpt.isPresent()) {
+                AttendanceRecord record = recordOpt.get();
+                request.setOriginalClockInTime(record.getClockInTime());
+                request.setOriginalClockOutTime(record.getClockOutTime());
+            }
+            
+            request.setAdjustmentRequestedTimeIn(correctedClockIn);
+            request.setAdjustmentRequestedTimeOut(correctedClockOut);
+            
+            // 時刻の妥当性チェック
+            if (correctedClockIn != null && correctedClockOut != null) {
+                if (!correctedClockOut.isAfter(correctedClockIn)) {
+                    return RequestResult.failure("INVALID_TIME", "退勤時刻は出勤時刻より後を指定してください");
+                }
+            }
+            
+            AdjustmentRequest saved = adjustmentRequestRepository.save(request);
+            
+            return RequestResult.success(saved.getAdjustmentRequestId(), null, "打刻修正申請が完了しました");
+            
+        } catch (Exception e) {
+            return RequestResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
-        
-        // 既存の修正申請チェック
-        Optional<AdjustmentRequest> existingRequest = 
-                adjustmentRequestRepository.findByEmployeeIdAndAdjustmentTargetDate(employeeId, targetDate);
-        
-        if (existingRequest.isPresent() && "未処理".equals(existingRequest.get().getAdjustmentStatus())) {
-            log.warn("打刻修正申請重複 - employeeId: {}, targetDate: {}", employeeId, targetDate);
-            throw new BusinessException("DUPLICATE_REQUEST", "既に申請済みです");
+    }
+    
+    /**
+     * 有給申請承認
+     */
+    public ApprovalResult approveLeaveRequest(Long requestId, Long approverId) {
+        try {
+            Optional<LeaveRequest> requestOpt = leaveRequestRepository.findById(requestId);
+            if (requestOpt.isEmpty()) {
+                return ApprovalResult.failure("REQUEST_NOT_FOUND", "申請が見つかりません");
+            }
+            
+            LeaveRequest request = requestOpt.get();
+            if (!request.isPending()) {
+                return ApprovalResult.failure("INVALID_STATUS", "処理済みの申請です");
+            }
+            
+            // 社員の有給残日数チェック
+            Optional<Employee> employeeOpt = employeeRepository.findById(request.getEmployeeId());
+            if (employeeOpt.isEmpty()) {
+                return ApprovalResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            if (employee.getPaidLeaveRemainingDays() <= 0) {
+                return ApprovalResult.failure("INSUFFICIENT_LEAVE_DAYS", "有給残日数が不足しています");
+            }
+            
+            // 承認処理
+            request.approve(approverId);
+            leaveRequestRepository.save(request);
+            
+            // 有給残日数減算
+            employee.setPaidLeaveRemainingDays(employee.getPaidLeaveRemainingDays() - 1);
+            employeeRepository.save(employee);
+            
+            // 勤怠レコードに有給記録作成
+            AttendanceRecord attendanceRecord = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDate(employee.getEmployeeId(), request.getLeaveRequestDate())
+                .orElse(new AttendanceRecord(employee.getEmployeeId(), request.getLeaveRequestDate()));
+            
+            attendanceRecord.setAttendanceStatus(AttendanceRecord.AttendanceStatus.PAID_LEAVE);
+            attendanceRecordRepository.save(attendanceRecord);
+            
+            return ApprovalResult.success("有給申請を承認しました");
+            
+        } catch (Exception e) {
+            return ApprovalResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
-        
-        // 元の打刻時刻を保存
-        LocalDateTime originalClockIn = null;
-        LocalDateTime originalClockOut = null;
-        if (attendanceOpt.isPresent()) {
-            originalClockIn = attendanceOpt.get().getClockInTime();
-            originalClockOut = attendanceOpt.get().getClockOutTime();
+    }
+    
+    /**
+     * 有給申請却下
+     */
+    public ApprovalResult rejectLeaveRequest(Long requestId, Long approverId, String reason) {
+        try {
+            Optional<LeaveRequest> requestOpt = leaveRequestRepository.findById(requestId);
+            if (requestOpt.isEmpty()) {
+                return ApprovalResult.failure("REQUEST_NOT_FOUND", "申請が見つかりません");
+            }
+            
+            LeaveRequest request = requestOpt.get();
+            if (!request.isPending()) {
+                return ApprovalResult.failure("INVALID_STATUS", "処理済みの申請です");
+            }
+            
+            request.reject(approverId);
+            leaveRequestRepository.save(request);
+            
+            return ApprovalResult.success("有給申請を却下しました");
+            
+        } catch (Exception e) {
+            return ApprovalResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
-        
-        AdjustmentRequest request = new AdjustmentRequest(
-                employeeId, targetDate, correctedClockInTime, correctedClockOutTime, reason);
-        request.setOriginalClockInTime(originalClockIn);
-        request.setOriginalClockOutTime(originalClockOut);
-        
-        AdjustmentRequest savedRequest = adjustmentRequestRepository.save(request);
-        
-        log.info("打刻修正申請完了 - requestId: {}, employeeId: {}, targetDate: {}", 
-                savedRequest.getAdjustmentRequestId(), employeeId, targetDate);
-        
-        return savedRequest;
     }
     
     /**
      * 打刻修正申請承認
-     * 
-     * @param requestId 申請ID
-     * @param approverId 承認者ID
-     * @throws BusinessException 申請が見つからない、処理済み、確定済み
      */
-    public void approveAdjustmentRequest(Long requestId, Long approverId) {
-        log.info("打刻修正申請承認開始 - requestId: {}, approverId: {}", requestId, approverId);
-        
-        AdjustmentRequest request = adjustmentRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("打刻修正申請が見つからない - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        if (!"未処理".equals(request.getAdjustmentStatus())) {
-            log.warn("打刻修正申請既処理済み - requestId: {}, status: {}", 
-                    requestId, request.getAdjustmentStatus());
-            throw new BusinessException("REQUEST_ALREADY_PROCESSED", "既に処理済みです");
-        }
-        
-        // 勤怠記録を更新
-        AttendanceRecord attendanceRecord = attendanceRecordRepository
-                .findByEmployeeIdAndAttendanceDate(
-                        request.getEmployeeId(), request.getAdjustmentTargetDate())
-                .orElse(new AttendanceRecord(request.getEmployeeId(), request.getAdjustmentTargetDate()));
-        
-        // 確定済みチェック
-        if (attendanceRecord.getAttendanceFixedFlag()) {
-            log.error("確定済み勤怠データの修正申請承認試行 - requestId: {}, targetDate: {}", 
-                    requestId, request.getAdjustmentTargetDate());
-            throw new BusinessException("FIXED_ATTENDANCE", "確定済みのため変更できません");
-        }
-        
-        // 修正時刻を設定
-        LocalDateTime beforeClockIn = attendanceRecord.getClockInTime();
-        LocalDateTime beforeClockOut = attendanceRecord.getClockOutTime();
-        
-        attendanceRecord.setClockInTime(request.getAdjustmentRequestedTimeIn());
-        attendanceRecord.setClockOutTime(request.getAdjustmentRequestedTimeOut());
-        
-        // 勤怠時間再計算
-        if (request.getAdjustmentRequestedTimeIn() != null && 
-            request.getAdjustmentRequestedTimeOut() != null) {
-            TimeCalculator.AttendanceCalculationResult result = 
-                    TimeCalculator.calculateAttendanceTimes(
-                            request.getAdjustmentRequestedTimeIn(), 
-                            request.getAdjustmentRequestedTimeOut());
+    public ApprovalResult approveAdjustmentRequest(Long requestId, Long approverId) {
+        try {
+            Optional<AdjustmentRequest> requestOpt = adjustmentRequestRepository.findById(requestId);
+            if (requestOpt.isEmpty()) {
+                return ApprovalResult.failure("REQUEST_NOT_FOUND", "申請が見つかりません");
+            }
             
-            attendanceRecord.setLateMinutes(result.getLateMinutes());
-            attendanceRecord.setEarlyLeaveMinutes(result.getEarlyLeaveMinutes());
-            attendanceRecord.setOvertimeMinutes(result.getOvertimeMinutes());
-            attendanceRecord.setNightShiftMinutes(result.getNightShiftMinutes());
-        } else {
-            // 部分修正の場合は個別計算
+            AdjustmentRequest request = requestOpt.get();
+            if (!request.isPending()) {
+                return ApprovalResult.failure("INVALID_STATUS", "処理済みの申請です");
+            }
+            
+            // 勤怠データの確定状態チェック
+            Optional<AttendanceRecord> recordOpt = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDate(request.getEmployeeId(), request.getAdjustmentTargetDate());
+            
+            if (recordOpt.isPresent() && recordOpt.get().isFixed()) {
+                return ApprovalResult.failure("FIXED_ATTENDANCE", "確定済みのため変更できません");
+            }
+            
+            // 承認処理
+            request.approve(approverId);
+            adjustmentRequestRepository.save(request);
+            
+            // 勤怠レコード更新
+            AttendanceRecord record = recordOpt.orElse(
+                new AttendanceRecord(request.getEmployeeId(), request.getAdjustmentTargetDate()));
+            
             if (request.getAdjustmentRequestedTimeIn() != null) {
-                int lateMinutes = TimeCalculator.calculateLateMinutes(request.getAdjustmentRequestedTimeIn());
-                attendanceRecord.setLateMinutes(lateMinutes);
+                record.setClockInTime(request.getAdjustmentRequestedTimeIn());
             }
-            if (request.getAdjustmentRequestedTimeOut() != null && attendanceRecord.getClockInTime() != null) {
-                int earlyLeaveMinutes = TimeCalculator.calculateEarlyLeaveMinutes(request.getAdjustmentRequestedTimeOut());
-                attendanceRecord.setEarlyLeaveMinutes(earlyLeaveMinutes);
-                
-                int workingMinutes = TimeCalculator.calculateWorkingMinutes(
-                        attendanceRecord.getClockInTime(), request.getAdjustmentRequestedTimeOut());
-                int overtimeMinutes = TimeCalculator.calculateOvertimeMinutes(workingMinutes);
-                attendanceRecord.setOvertimeMinutes(overtimeMinutes);
-                
-                int nightShiftMinutes = TimeCalculator.calculateNightShiftMinutes(
-                        attendanceRecord.getClockInTime(), request.getAdjustmentRequestedTimeOut());
-                attendanceRecord.setNightShiftMinutes(nightShiftMinutes);
+            if (request.getAdjustmentRequestedTimeOut() != null) {
+                record.setClockOutTime(request.getAdjustmentRequestedTimeOut());
             }
+            
+            // 時間の再計算
+            if (record.hasClockInTime() && record.hasClockOutTime()) {
+                TimeCalculator.AttendanceCalculationResult calculation = 
+                    timeCalculator.calculateAttendanceTimes(record.getClockInTime(), record.getClockOutTime());
+                
+                record.setLateMinutes(calculation.getLateMinutes());
+                record.setEarlyLeaveMinutes(calculation.getEarlyLeaveMinutes());
+                record.setOvertimeMinutes(calculation.getOvertimeMinutes());
+                record.setNightShiftMinutes(calculation.getNightShiftMinutes());
+            }
+            
+            attendanceRecordRepository.save(record);
+            
+            return ApprovalResult.success("打刻修正申請を承認しました");
+            
+        } catch (Exception e) {
+            return ApprovalResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
-        
-        attendanceRecordRepository.save(attendanceRecord);
-        
-        // 申請を承認済みに更新
-        request.setAdjustmentStatus("承認");
-        request.setApprovedByEmployeeId(approverId);
-        request.setApprovedAt(LocalDateTime.now());
-        adjustmentRequestRepository.save(request);
-        
-        log.info("打刻修正申請承認完了 - requestId: {}, employeeId: {}, 修正前: [{},{}] → 修正後: [{},{}]", 
-                requestId, request.getEmployeeId(), 
-                beforeClockIn, beforeClockOut,
-                attendanceRecord.getClockInTime(), attendanceRecord.getClockOutTime());
     }
     
     /**
      * 打刻修正申請却下
-     * 
-     * @param requestId 申請ID
-     * @param approverId 承認者ID
-     * @param rejectionReason 却下理由
-     * @throws BusinessException 申請が見つからない、処理済み
      */
-    public void rejectAdjustmentRequest(Long requestId, Long approverId, String rejectionReason) {
-        log.info("打刻修正申請却下開始 - requestId: {}, approverId: {}, reason: {}", 
-                requestId, approverId, rejectionReason);
+    public ApprovalResult rejectAdjustmentRequest(Long requestId, Long approverId, String reason) {
+        try {
+            Optional<AdjustmentRequest> requestOpt = adjustmentRequestRepository.findById(requestId);
+            if (requestOpt.isEmpty()) {
+                return ApprovalResult.failure("REQUEST_NOT_FOUND", "申請が見つかりません");
+            }
+            
+            AdjustmentRequest request = requestOpt.get();
+            if (!request.isPending()) {
+                return ApprovalResult.failure("INVALID_STATUS", "処理済みの申請です");
+            }
+            
+            request.reject(approverId, reason);
+            adjustmentRequestRepository.save(request);
+            
+            return ApprovalResult.success("打刻修正申請を却下しました");
+            
+        } catch (Exception e) {
+            return ApprovalResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
+    }
+    
+    /**
+     * 申請一覧取得（管理者用）
+     */
+    @Transactional(readOnly = true)
+    public List<LeaveRequest> getLeaveRequestList(LeaveRequest.LeaveRequestStatus status, Long employeeId, String employeeName) {
+        return leaveRequestRepository.searchLeaveRequests(status, employeeId, employeeName);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AdjustmentRequest> getAdjustmentRequestList(AdjustmentRequest.AdjustmentStatus status, Long employeeId, String employeeName) {
+        return adjustmentRequestRepository.searchAdjustmentRequests(status, employeeId, employeeName);
+    }
+    
+    /**
+     * 社員の申請履歴取得
+     */
+    @Transactional(readOnly = true)
+    public List<LeaveRequest> getEmployeeLeaveHistory(Long employeeId) {
+        return leaveRequestRepository.findByEmployeeIdOrderByLeaveRequestDateDesc(employeeId);
+    }
+    
+    @Transactional(readOnly = true)
+    public List<AdjustmentRequest> getEmployeeAdjustmentHistory(Long employeeId) {
+        return adjustmentRequestRepository.findByEmployeeIdOrderByAdjustmentTargetDateDesc(employeeId);
+    }
+    
+    /**
+     * 申請結果クラス
+     */
+    public static class RequestResult {
+        private final boolean success;
+        private final Long requestId;
+        private final Integer remainingDays;
+        private final String message;
+        private final String errorCode;
         
-        AdjustmentRequest request = adjustmentRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("打刻修正申請が見つからない（却下） - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        if (!"未処理".equals(request.getAdjustmentStatus())) {
-            log.warn("打刻修正申請既処理済み（却下） - requestId: {}, status: {}", 
-                    requestId, request.getAdjustmentStatus());
-            throw new BusinessException("REQUEST_ALREADY_PROCESSED", "既に処理済みです");
+        private RequestResult(boolean success, Long requestId, Integer remainingDays, 
+                            String message, String errorCode) {
+            this.success = success;
+            this.requestId = requestId;
+            this.remainingDays = remainingDays;
+            this.message = message;
+            this.errorCode = errorCode;
         }
         
-        request.setAdjustmentStatus("却下");
-        request.setApprovedByEmployeeId(approverId);
-        request.setApprovedAt(LocalDateTime.now());
-        request.setRejectionReason(rejectionReason);
-        adjustmentRequestRepository.save(request);
-        
-        log.info("打刻修正申請却下完了 - requestId: {}, employeeId: {}", 
-                requestId, request.getEmployeeId());
-    }
-    
-    /**
-     * 有給申請一覧取得（フィルター付き）
-     * 
-     * @param employeeId 社員IDフィルター（null=全て）
-     * @param status ステータスフィルター（null=全て）
-     * @return 有給申請リスト
-     */
-    public List<LeaveRequest> getLeaveRequests(Long employeeId, String status) {
-        log.debug("有給申請一覧取得 - employeeId: {}, status: {}", employeeId, status);
-        return leaveRequestRepository.findLeaveRequestsWithFilters(employeeId, status);
-    }
-    
-    /**
-     * 打刻修正申請一覧取得（フィルター付き）
-     * 
-     * @param employeeId 社員IDフィルター（null=全て）
-     * @param status ステータスフィルター（null=全て）
-     * @return 打刻修正申請リスト
-     */
-    public List<AdjustmentRequest> getAdjustmentRequests(Long employeeId, String status) {
-        log.debug("打刻修正申請一覧取得 - employeeId: {}, status: {}", employeeId, status);
-        return adjustmentRequestRepository.findAdjustmentRequestsWithFilters(employeeId, status);
-    }
-    
-    /**
-     * 申請統計情報取得
-     * 
-     * @param employeeId 対象社員ID（null=全体）
-     * @return 統計情報マップ
-     */
-    public Map<String, Object> getRequestStatistics(Long employeeId) {
-        log.debug("申請統計情報取得 - employeeId: {}", employeeId);
-        
-        Map<String, Object> statistics = new HashMap<>();
-        
-        // 有給申請統計
-        List<LeaveRequest> leaveRequests = getLeaveRequests(employeeId, null);
-        long pendingLeaveRequests = leaveRequests.stream()
-                .filter(req -> "未処理".equals(req.getLeaveRequestStatus()))
-                .count();
-        long approvedLeaveRequests = leaveRequests.stream()
-                .filter(req -> "承認".equals(req.getLeaveRequestStatus()))
-                .count();
-        long rejectedLeaveRequests = leaveRequests.stream()
-                .filter(req -> "却下".equals(req.getLeaveRequestStatus()))
-                .count();
-        
-        Map<String, Object> leaveStats = new HashMap<>();
-        leaveStats.put("total", leaveRequests.size());
-        leaveStats.put("pending", pendingLeaveRequests);
-        leaveStats.put("approved", approvedLeaveRequests);
-        leaveStats.put("rejected", rejectedLeaveRequests);
-        statistics.put("leaveRequests", leaveStats);
-        
-        // 打刻修正申請統計
-        List<AdjustmentRequest> adjustmentRequests = getAdjustmentRequests(employeeId, null);
-        long pendingAdjustmentRequests = adjustmentRequests.stream()
-                .filter(req -> "未処理".equals(req.getAdjustmentStatus()))
-                .count();
-        long approvedAdjustmentRequests = adjustmentRequests.stream()
-                .filter(req -> "承認".equals(req.getAdjustmentStatus()))
-                .count();
-        long rejectedAdjustmentRequests = adjustmentRequests.stream()
-                .filter(req -> "却下".equals(req.getAdjustmentStatus()))
-                .count();
-        
-        Map<String, Object> adjustmentStats = new HashMap<>();
-        adjustmentStats.put("total", adjustmentRequests.size());
-        adjustmentStats.put("pending", pendingAdjustmentRequests);
-        adjustmentStats.put("approved", approvedAdjustmentRequests);
-        adjustmentStats.put("rejected", rejectedAdjustmentRequests);
-        statistics.put("adjustmentRequests", adjustmentStats);
-        
-        return statistics;
-    }
-    
-    /**
-     * 申請の詳細情報取得（有給申請）
-     * 
-     * @param requestId 申請ID
-     * @return 有給申請の詳細情報
-     * @throws BusinessException 申請が見つからない
-     */
-    public Map<String, Object> getLeaveRequestDetail(Long requestId) {
-        log.debug("有給申請詳細取得 - requestId: {}", requestId);
-        
-        LeaveRequest request = leaveRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("有給申請が見つからない（詳細取得） - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        Employee employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません"));
-        
-        Map<String, Object> detail = new HashMap<>();
-        detail.put("requestId", request.getLeaveRequestId());
-        detail.put("employeeId", request.getEmployeeId());
-        detail.put("employeeName", employee.getEmployeeName());
-        detail.put("employeeCode", employee.getEmployeeCode());
-        detail.put("leaveDate", request.getLeaveRequestDate());
-        detail.put("reason", request.getLeaveRequestReason());
-        detail.put("status", request.getLeaveRequestStatus());
-        detail.put("createdAt", request.getCreatedAt());
-        
-        if (request.getApprovedByEmployeeId() != null) {
-            Employee approver = employeeRepository.findById(request.getApprovedByEmployeeId())
-                    .orElse(null);
-            if (approver != null) {
-                detail.put("approverName", approver.getEmployeeName());
-                detail.put("approvedAt", request.getApprovedAt());
-            }
+        public static RequestResult success(Long requestId, Integer remainingDays, String message) {
+            return new RequestResult(true, requestId, remainingDays, message, null);
         }
         
-        return detail;
+        public static RequestResult failure(String errorCode, String message) {
+            return new RequestResult(false, null, null, message, errorCode);
+        }
+        
+        // Getters
+        public boolean isSuccess() { return success; }
+        public Long getRequestId() { return requestId; }
+        public Integer getRemainingDays() { return remainingDays; }
+        public String getMessage() { return message; }
+        public String getErrorCode() { return errorCode; }
     }
     
     /**
-     * 申請の詳細情報取得（打刻修正申請）
-     * 
-     * @param requestId 申請ID
-     * @return 打刻修正申請の詳細情報
-     * @throws BusinessException 申請が見つからない
+     * 承認結果クラス
      */
-    public Map<String, Object> getAdjustmentRequestDetail(Long requestId) {
-        log.debug("打刻修正申請詳細取得 - requestId: {}", requestId);
+    public static class ApprovalResult {
+        private final boolean success;
+        private final String message;
+        private final String errorCode;
         
-        AdjustmentRequest request = adjustmentRequestRepository.findById(requestId)
-                .orElseThrow(() -> {
-                    log.error("打刻修正申請が見つからない（詳細取得） - requestId: {}", requestId);
-                    return new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません");
-                });
-        
-        Employee employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません"));
-        
-        Map<String, Object> detail = new HashMap<>();
-        detail.put("requestId", request.getAdjustmentRequestId());
-        detail.put("employeeId", request.getEmployeeId());
-        detail.put("employeeName", employee.getEmployeeName());
-        detail.put("employeeCode", employee.getEmployeeCode());
-        detail.put("targetDate", request.getAdjustmentTargetDate());
-        detail.put("originalClockInTime", request.getOriginalClockInTime());
-        detail.put("originalClockOutTime", request.getOriginalClockOutTime());
-        detail.put("requestedClockInTime", request.getAdjustmentRequestedTimeIn());
-        detail.put("requestedClockOutTime", request.getAdjustmentRequestedTimeOut());
-        detail.put("reason", request.getAdjustmentReason());
-        detail.put("status", request.getAdjustmentStatus());
-        detail.put("createdAt", request.getCreatedAt());
-        
-        if (request.getApprovedByEmployeeId() != null) {
-            Employee approver = employeeRepository.findById(request.getApprovedByEmployeeId())
-                    .orElse(null);
-            if (approver != null) {
-                detail.put("approverName", approver.getEmployeeName());
-                detail.put("approvedAt", request.getApprovedAt());
-            }
+        private ApprovalResult(boolean success, String message, String errorCode) {
+            this.success = success;
+            this.message = message;
+            this.errorCode = errorCode;
         }
         
-        if (request.getRejectionReason() != null) {
-            detail.put("rejectionReason", request.getRejectionReason());
+        public static ApprovalResult success(String message) {
+            return new ApprovalResult(true, message, null);
         }
         
-        return detail;
-    }
-    
-    /**
-     * 申請のキャンセル（未処理のみ）
-     * 
-     * @param requestId 申請ID
-     * @param requestType 申請タイプ（"leave" or "adjustment"）
-     * @param employeeId キャンセル実行者ID（本人チェック用）
-     * @throws BusinessException 申請が見つからない、処理済み、権限なし
-     */
-    public void cancelRequest(Long requestId, String requestType, Long employeeId) {
-        log.info("申請キャンセル開始 - requestId: {}, type: {}, employeeId: {}", 
-                requestId, requestType, employeeId);
-        
-        if ("leave".equals(requestType)) {
-            LeaveRequest request = leaveRequestRepository.findById(requestId)
-                    .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません"));
-            
-            if (!request.getEmployeeId().equals(employeeId)) {
-                throw new BusinessException("ACCESS_DENIED", "自分の申請のみキャンセルできます");
-            }
-            
-            if (!"未処理".equals(request.getLeaveRequestStatus())) {
-                throw new BusinessException("REQUEST_ALREADY_PROCESSED", "処理済みの申請はキャンセルできません");
-            }
-            
-            leaveRequestRepository.delete(request);
-            log.info("有給申請キャンセル完了 - requestId: {}", requestId);
-            
-        } else if ("adjustment".equals(requestType)) {
-            AdjustmentRequest request = adjustmentRequestRepository.findById(requestId)
-                    .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "申請が見つかりません"));
-            
-            if (!request.getEmployeeId().equals(employeeId)) {
-                throw new BusinessException("ACCESS_DENIED", "自分の申請のみキャンセルできます");
-            }
-            
-            if (!"未処理".equals(request.getAdjustmentStatus())) {
-                throw new BusinessException("REQUEST_ALREADY_PROCESSED", "処理済みの申請はキャンセルできません");
-            }
-            
-            adjustmentRequestRepository.delete(request);
-            log.info("打刻修正申請キャンセル完了 - requestId: {}", requestId);
-            
-        } else {
-            throw new BusinessException("INVALID_REQUEST_TYPE", "不正な申請タイプです");
+        public static ApprovalResult failure(String errorCode, String message) {
+            return new ApprovalResult(false, message, errorCode);
         }
+        
+        // Getters
+        public boolean isSuccess() { return success; }
+        public String getMessage() { return message; }
+        public String getErrorCode() { return errorCode; }
     }
 }

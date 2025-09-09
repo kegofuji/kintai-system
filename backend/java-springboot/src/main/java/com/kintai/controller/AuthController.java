@@ -1,16 +1,15 @@
 package com.kintai.controller;
 
+import com.kintai.dto.ApiResponse;
 import com.kintai.dto.LoginRequest;
-import com.kintai.entity.Employee;
-import com.kintai.exception.BusinessException;
+import com.kintai.dto.LoginResponse;
 import com.kintai.service.AuthService;
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.servlet.http.HttpSession;
-import jakarta.validation.Valid;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -22,159 +21,91 @@ public class AuthController {
     
     /**
      * ログイン
-     * POST /api/auth/login
-     * 
-     * リクエスト:
-     * {
-     *   "employeeCode": "E001",
-     *   "password": "password123"
-     * }
-     * 
-     * レスポンス（成功）:
-     * {
-     *   "success": true,
-     *   "data": {
-     *     "employeeId": 1,
-     *     "employeeName": "山田太郎",
-     *     "role": "employee",
-     *     "sessionToken": "ABC123..."
-     *   }
-     * }
      */
     @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest loginRequest,
-                                                    HttpSession session) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpSession session) {
         
-        try {
-            Employee employee = authService.authenticate(
-                    loginRequest.getEmployeeCode(), 
-                    loginRequest.getPassword(), 
-                    session);
+        AuthService.AuthResult result = authService.authenticate(
+            request.getEmployeeCode(), request.getPassword(), session);
+        
+        if (result.isSuccess()) {
+            LoginResponse response = new LoginResponse(
+                result.getEmployee().getEmployeeId(),
+                result.getEmployee().getEmployeeName(),
+                result.getEmployee().getEmployeeRole().getValue(),
+                result.getSessionToken()
+            );
             
-            Map<String, Object> data = new HashMap<>();
-            data.put("employeeId", employee.getEmployeeId());
-            data.put("employeeName", employee.getEmployeeName());
-            data.put("role", employee.getEmployeeRole().name());
-            data.put("sessionToken", session.getId());
-            
-            response.put("success", true);
-            response.put("data", data);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.ok(ApiResponse.success(response, "ログインしました"));
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error(result.getErrorCode(), result.getMessage()));
         }
     }
     
     /**
      * ログアウト
-     * POST /api/auth/logout
-     * 
-     * レスポンス:
-     * {
-     *   "success": true,
-     *   "data": {},
-     *   "message": "ログアウトしました"
-     * }
      */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, Object>> logout(HttpSession session) {
-        Map<String, Object> response = new HashMap<>();
-        
+    public ResponseEntity<ApiResponse<Void>> logout(HttpSession session) {
         authService.logout(session);
-        
-        response.put("success", true);
-        response.put("data", new HashMap<>());
-        response.put("message", "ログアウトしました");
-        
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(null, "ログアウトしました"));
     }
     
     /**
      * セッション確認
-     * GET /api/auth/session
-     * 
-     * レスポンス（成功）:
-     * {
-     *   "success": true,
-     *   "data": {
-     *     "employeeId": 1,
-     *     "employeeName": "山田太郎",
-     *     "role": "employee",
-     *     "remainingTime": 480
-     *   }
-     * }
-     * 
-     * レスポンス（セッション切れ）:
-     * {
-     *   "success": false,
-     *   "errorCode": "SESSION_TIMEOUT",
-     *   "message": "セッションがタイムアウトしました"
-     * }
      */
     @GetMapping("/session")
-    public ResponseEntity<Map<String, Object>> checkSession(HttpSession session) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getSession(HttpSession session) {
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
         
-        try {
-            Employee employee = authService.getCurrentEmployee(session);
-            
-            Map<String, Object> data = new HashMap<>();
-            data.put("employeeId", employee.getEmployeeId());
-            data.put("employeeName", employee.getEmployeeName());
-            data.put("role", employee.getEmployeeRole().name());
-            data.put("remainingTime", session.getMaxInactiveInterval());
-            
-            response.put("success", true);
-            response.put("data", data);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            
-            return ResponseEntity.status(401).body(response);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
         }
+        
+        Map<String, Object> data = Map.of(
+            "employeeId", sessionInfo.getEmployeeId(),
+            "employeeName", sessionInfo.getEmployeeName(),
+            "role", sessionInfo.getRole(),
+            "remainingTime", sessionInfo.getRemainingTime()
+        );
+        
+        return ResponseEntity.ok(ApiResponse.success(data));
     }
     
     /**
-     * 初回パスワード設定
-     * POST /api/auth/set-password
-     * 
-     * リクエスト:
-     * {
-     *   "employeeCode": "E001",
-     *   "newPassword": "NewSecure123!"
-     * }
+     * パスワード変更
      */
-    @PostMapping("/set-password")
-    public ResponseEntity<Map<String, Object>> setInitialPassword(
-            @RequestBody Map<String, String> requestBody) {
-        Map<String, Object> response = new HashMap<>();
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @RequestBody Map<String, String> request,
+            HttpSession session) {
+        
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
+        }
+        
+        String oldPassword = request.get("oldPassword");
+        String newPassword = request.get("newPassword");
         
         try {
-            String employeeCode = requestBody.get("employeeCode");
-            String newPassword = requestBody.get("newPassword");
+            boolean success = authService.changePassword(
+                sessionInfo.getEmployeeId(), oldPassword, newPassword);
             
-            authService.setInitialPassword(employeeCode, newPassword);
-            
-            response.put("success", true);
-            response.put("message", "パスワードが設定されました");
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            if (success) {
+                return ResponseEntity.ok(ApiResponse.success(null, "パスワードを変更しました"));
+            } else {
+                return ResponseEntity.badRequest().body(
+                    ApiResponse.error("INVALID_PASSWORD", "現在のパスワードが正しくありません"));
+            }
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("VALIDATION_ERROR", e.getMessage()));
         }
     }
 }

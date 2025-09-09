@@ -1,48 +1,25 @@
 package com.kintai.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-    
+
     @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new SessionTimeoutInterceptor())
-                .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/login");
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/").setViewName("forward:/index.html");
+        registry.addViewController("/login").setViewName("forward:/index.html");
+        registry.addViewController("/employee/**").setViewName("forward:/index.html");
+        registry.addViewController("/admin/**").setViewName("forward:/index.html");
     }
-    
-    /**
-     * セッションタイムアウト制御インターセプター
-     */
-    public static class SessionTimeoutInterceptor extends HandlerInterceptorAdapter {
-        
-        @Override
-        public boolean preHandle(HttpServletRequest request, HttpServletResponse response, 
-                               Object handler) throws Exception {
-            
-            HttpSession session = request.getSession(false);
-            if (session == null || session.getAttribute("employeeId") == null) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.setCharacterEncoding("UTF-8");
-                response.getWriter().write(
-                    "{\"success\":false,\"errorCode\":\"SESSION_TIMEOUT\"," +
-                    "\"message\":\"セッションがタイムアウトしました\"}"
-                );
-                return false;
-            }
-            
-            // セッションを延長
-            session.setMaxInactiveInterval(600); // 10分
-            return true;
-        }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/**")
+                .addResourceLocations("classpath:/static/")
+                .setCachePeriod(3600);
     }
 }

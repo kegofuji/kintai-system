@@ -1,11 +1,8 @@
 package com.kintai.service;
 
 import com.kintai.entity.Employee;
-import com.kintai.exception.BusinessException;
 import com.kintai.repository.EmployeeRepository;
 import com.kintai.util.ValidationUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -13,12 +10,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
 public class EmployeeService {
-    
-    private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
     
     @Autowired
     private EmployeeRepository employeeRepository;
@@ -26,295 +22,306 @@ public class EmployeeService {
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    /**
-     * 社員登録
-     * 
-     * @param employeeCode 社員コード（3-10文字の半角英数字）
-     * @param employeeName 氏名（50文字以内）
-     * @param email メールアドレス（100文字以内）
-     * @param password パスワード（8-20文字、複雑性要件あり）
-     * @return 作成された社員エンティティ
-     * @throws BusinessException 重複チェック、バリデーションエラー
-     */
-    public Employee createEmployee(String employeeCode, String employeeName, 
-                                 String email, String password) {
-        log.info("社員登録開始 - employeeCode: {}, employeeName: {}", employeeCode, employeeName);
-        
-        // 重複チェック
-        if (employeeRepository.existsByEmployeeCode(employeeCode)) {
-            log.warn("社員コード重複 - employeeCode: {}", employeeCode);
-            throw new BusinessException("DUPLICATE_EMPLOYEE_CODE", "社員IDが既に存在します");
-        }
-        
-        if (employeeRepository.existsByEmail(email)) {
-            log.warn("メールアドレス重複 - email: {}", email);
-            throw new BusinessException("DUPLICATE_EMAIL", "メールアドレスが既に存在します");
-        }
-        
-        // パスワードバリデーション
-        if (!ValidationUtil.isValidPassword(password, employeeCode)) {
-            String errorMessage = ValidationUtil.getPasswordValidationMessage(password, employeeCode);
-            log.warn("パスワードバリデーションエラー - employeeCode: {}, error: {}", employeeCode, errorMessage);
-            throw new BusinessException("VALIDATION_ERROR", errorMessage);
-        }
-        
-        // パスワードハッシュ化
-        String hashedPassword = passwordEncoder.encode(password);
-        
-        // 社員エンティティ作成
-        Employee employee = new Employee(employeeCode, employeeName, email, 
-                                       hashedPassword, Employee.EmployeeRole.employee);
-        employee.setPaidLeaveRemainingDays(10); // 初期有給日数
-        
-        Employee savedEmployee = employeeRepository.save(employee);
-        log.info("社員登録完了 - employeeId: {}, employeeCode: {}", savedEmployee.getEmployeeId(), employeeCode);
-        
-        return savedEmployee;
-    }
+    @Autowired
+    private ValidationUtil validationUtil;
     
     /**
-     * 社員情報更新
-     * 
-     * @param employeeId 社員ID
-     * @param employeeName 新しい氏名
-     * @param email 新しいメールアドレス
-     * @return 更新された社員エンティティ
-     * @throws BusinessException 社員が見つからない、メール重複
+     * 社員一覧取得
      */
-    public Employee updateEmployee(Long employeeId, String employeeName, String email) {
-        log.info("社員情報更新開始 - employeeId: {}", employeeId);
-        
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> {
-                    log.error("社員が見つからない - employeeId: {}", employeeId);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
-        
-        // メール重複チェック（自分以外）
-        if (!employee.getEmail().equals(email) && employeeRepository.existsByEmail(email)) {
-            log.warn("メールアドレス重複（更新時） - email: {}", email);
-            throw new BusinessException("DUPLICATE_EMAIL", "メールアドレスが既に存在します");
+    @Transactional(readOnly = true)
+    public List<Employee> getAllEmployees(Employee.EmploymentStatus status) {
+        if (status == null) {
+            return employeeRepository.findAll();
         }
-        
-        employee.setEmployeeName(employeeName);
-        employee.setEmail(email);
-        
-        Employee savedEmployee = employeeRepository.save(employee);
-        log.info("社員情報更新完了 - employeeId: {}", employeeId);
-        
-        return savedEmployee;
-    }
-    
-    /**
-     * 退職処理
-     * 
-     * @param employeeId 社員ID
-     * @param retiredAt 退職日
-     * @return 退職処理された社員エンティティ
-     * @throws BusinessException 社員が見つからない
-     */
-    public Employee retireEmployee(Long employeeId, LocalDate retiredAt) {
-        log.info("退職処理開始 - employeeId: {}, retiredAt: {}", employeeId, retiredAt);
-        
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> {
-                    log.error("社員が見つからない（退職処理） - employeeId: {}", employeeId);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
-        
-        employee.setEmploymentStatus(Employee.EmploymentStatus.retired);
-        employee.setRetiredAt(retiredAt);
-        
-        Employee savedEmployee = employeeRepository.save(employee);
-        log.info("退職処理完了 - employeeId: {}, employeeCode: {}", employeeId, employee.getEmployeeCode());
-        
-        return savedEmployee;
-    }
-    
-    /**
-     * 有給日数調整
-     * 
-     * @param employeeId 社員ID
-     * @param adjustmentDays 調整日数（正数=追加、負数=減算）
-     * @param reason 調整理由
-     * @return 調整後の社員エンティティ
-     * @throws BusinessException 社員が見つからない、退職者、残日数不足
-     */
-    public Employee adjustPaidLeaveDays(Long employeeId, Integer adjustmentDays, String reason) {
-        log.info("有給日数調整開始 - employeeId: {}, adjustmentDays: {}, reason: {}", 
-                employeeId, adjustmentDays, reason);
-        
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> {
-                    log.error("社員が見つからない（有給調整） - employeeId: {}", employeeId);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
-        
-        // 退職者チェック
-        if (employee.getEmploymentStatus() == Employee.EmploymentStatus.retired) {
-            log.warn("退職者への有給調整試行 - employeeId: {}, employeeCode: {}", 
-                    employeeId, employee.getEmployeeCode());
-            throw new BusinessException("EMPLOYEE_RETIRED", "退職者の有給日数は調整できません");
-        }
-        
-        int currentDays = employee.getPaidLeaveRemainingDays();
-        int newRemainingDays = currentDays + adjustmentDays;
-        
-        // 負数チェック
-        if (newRemainingDays < 0) {
-            log.warn("有給残日数が負数になる調整 - employeeId: {}, current: {}, adjustment: {}, result: {}", 
-                    employeeId, currentDays, adjustmentDays, newRemainingDays);
-            throw new BusinessException("INSUFFICIENT_LEAVE_DAYS", "調整後の残日数が負数になります");
-        }
-        
-        employee.setPaidLeaveRemainingDays(newRemainingDays);
-        Employee savedEmployee = employeeRepository.save(employee);
-        
-        log.info("有給日数調整完了 - employeeId: {}, 調整前: {}日, 調整: {}日, 調整後: {}日", 
-                employeeId, currentDays, adjustmentDays, newRemainingDays);
-        
-        return savedEmployee;
-    }
-    
-    /**
-     * 社員検索
-     * 
-     * @param keyword 検索キーワード（氏名または社員コード）
-     * @param status 在籍状況フィルター（null=全て）
-     * @return 検索結果の社員リスト
-     */
-    public List<Employee> searchEmployees(String keyword, Employee.EmploymentStatus status) {
-        log.info("社員検索 - keyword: {}, status: {}", keyword, status);
-        
-        if (keyword == null || keyword.trim().isEmpty()) {
-            if (status != null) {
-                return employeeRepository.findByEmploymentStatus(status);
-            } else {
-                return employeeRepository.findAll();
-            }
-        }
-        
-        List<Employee> results = employeeRepository.searchEmployees(keyword.trim(), status);
-        log.info("社員検索完了 - 検索結果: {}件", results.size());
-        
-        return results;
+        return employeeRepository.findByEmploymentStatus(status);
     }
     
     /**
      * 在籍社員一覧取得
-     * 
-     * @return 在籍中の社員リスト
      */
+    @Transactional(readOnly = true)
     public List<Employee> getActiveEmployees() {
-        log.debug("在籍社員一覧取得");
-        return employeeRepository.findByEmploymentStatus(Employee.EmploymentStatus.active);
+        return employeeRepository.findActiveEmployees();
     }
     
     /**
-     * 管理者一覧取得
-     * 
-     * @return 管理者権限を持つ社員リスト
+     * 社員検索
      */
-    public List<Employee> getAdminEmployees() {
-        log.debug("管理者一覧取得");
-        return employeeRepository.findByEmployeeRole(Employee.EmployeeRole.admin);
+    @Transactional(readOnly = true)
+    public List<Employee> searchEmployees(String keyword, Employee.EmploymentStatus status) {
+        return employeeRepository.searchEmployees(keyword, status);
     }
     
     /**
-     * 社員詳細取得
-     * 
-     * @param employeeId 社員ID
-     * @return 社員エンティティ
-     * @throws BusinessException 社員が見つからない
+     * 社員取得
      */
-    public Employee getEmployeeById(Long employeeId) {
-        return employeeRepository.findById(employeeId)
-                .orElseThrow(() -> {
-                    log.error("社員が見つからない（ID検索） - employeeId: {}", employeeId);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
+    @Transactional(readOnly = true)
+    public Optional<Employee> getEmployeeById(Long employeeId) {
+        return employeeRepository.findById(employeeId);
+    }
+    
+    @Transactional(readOnly = true)
+    public Optional<Employee> getEmployeeByCode(String employeeCode) {
+        return employeeRepository.findByEmployeeCode(employeeCode);
     }
     
     /**
-     * 社員コードで検索
-     * 
-     * @param employeeCode 社員コード
-     * @return 社員エンティティ
-     * @throws BusinessException 社員が見つからない
+     * 社員追加
      */
-    public Employee getEmployeeByCode(String employeeCode) {
-        return employeeRepository.findByEmployeeCode(employeeCode)
-                .orElseThrow(() -> {
-                    log.error("社員が見つからない（コード検索） - employeeCode: {}", employeeCode);
-                    return new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-                });
+    public EmployeeOperationResult addEmployee(String employeeCode, String employeeName, String email,
+                                             String password, String role, LocalDate hiredAt) {
+        try {
+            // バリデーション
+            if (!validationUtil.isValidEmployeeCode(employeeCode)) {
+                return EmployeeOperationResult.failure("VALIDATION_ERROR", "社員コードの形式が正しくありません");
+            }
+            
+            if (!validationUtil.isValidEmail(email)) {
+                return EmployeeOperationResult.failure("VALIDATION_ERROR", "メールアドレスの形式が正しくありません");
+            }
+            
+            if (!validationUtil.isValidPassword(password, employeeCode)) {
+                return EmployeeOperationResult.failure("VALIDATION_ERROR", "パスワードの形式が正しくありません");
+            }
+            
+            // 重複チェック
+            if (employeeRepository.existsByEmployeeCode(employeeCode)) {
+                return EmployeeOperationResult.failure("DUPLICATE_CODE", "社員コードが既に使用されています");
+            }
+            
+            if (employeeRepository.existsByEmail(email)) {
+                return EmployeeOperationResult.failure("DUPLICATE_EMAIL", "メールアドレスが既に使用されています");
+            }
+            
+            // 社員作成
+            Employee employee = new Employee();
+            employee.setEmployeeCode(employeeCode);
+            employee.setEmployeeName(employeeName);
+            employee.setEmail(email);
+            employee.setEmployeePasswordHash(passwordEncoder.encode(password));
+            employee.setEmployeeRole(Employee.EmployeeRole.valueOf(role.toUpperCase()));
+            employee.setHiredAt(hiredAt);
+            employee.setEmploymentStatus(Employee.EmploymentStatus.ACTIVE);
+            employee.setPaidLeaveRemainingDays(10); // 初期値10日
+            
+            Employee saved = employeeRepository.save(employee);
+            
+            return EmployeeOperationResult.success(saved, "社員を追加しました");
+            
+        } catch (Exception e) {
+            return EmployeeOperationResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
     }
     
     /**
-     * 社員の基本統計情報取得
-     * 
-     * @return 統計情報マップ
+     * 社員情報更新
      */
-    public Map<String, Long> getEmployeeStatistics() {
-        log.debug("社員統計情報取得");
-        
-        long totalEmployees = employeeRepository.count();
-        long activeEmployees = employeeRepository.findByEmploymentStatus(Employee.EmploymentStatus.active).size();
-        long retiredEmployees = employeeRepository.findByEmploymentStatus(Employee.EmploymentStatus.retired).size();
-        long adminEmployees = employeeRepository.findByEmployeeRole(Employee.EmployeeRole.admin).size();
-        
-        Map<String, Long> statistics = new HashMap<>();
-        statistics.put("total", totalEmployees);
-        statistics.put("active", activeEmployees);
-        statistics.put("retired", retiredEmployees);
-        statistics.put("admin", adminEmployees);
-        
-        return statistics;
+    public EmployeeOperationResult updateEmployee(Long employeeId, String employeeName, String email, String role) {
+        try {
+            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
+            if (employeeOpt.isEmpty()) {
+                return EmployeeOperationResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            
+            // メール重複チェック（自分以外）
+            if (!employee.getEmail().equals(email) && employeeRepository.existsByEmail(email)) {
+                return EmployeeOperationResult.failure("DUPLICATE_EMAIL", "メールアドレスが既に使用されています");
+            }
+            
+            // バリデーション
+            if (!validationUtil.isValidEmail(email)) {
+                return EmployeeOperationResult.failure("VALIDATION_ERROR", "メールアドレスの形式が正しくありません");
+            }
+            
+            // 更新
+            employee.setEmployeeName(employeeName);
+            employee.setEmail(email);
+            if (role != null) {
+                employee.setEmployeeRole(Employee.EmployeeRole.valueOf(role.toUpperCase()));
+            }
+            
+            Employee saved = employeeRepository.save(employee);
+            
+            return EmployeeOperationResult.success(saved, "社員情報を更新しました");
+            
+        } catch (Exception e) {
+            return EmployeeOperationResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
     }
     
     /**
-     * 管理者権限を付与
-     * 
-     * @param employeeId 社員ID
-     * @return 更新された社員エンティティ
-     * @throws BusinessException 社員が見つからない、退職者
+     * 退職処理
      */
-    public Employee grantAdminRole(Long employeeId) {
-        log.info("管理者権限付与 - employeeId: {}", employeeId);
+    public EmployeeOperationResult retireEmployee(Long employeeId, LocalDate retiredAt) {
+        try {
+            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
+            if (employeeOpt.isEmpty()) {
+                return EmployeeOperationResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            
+            if (employee.getEmploymentStatus() == Employee.EmploymentStatus.RETIRED) {
+                return EmployeeOperationResult.failure("ALREADY_RETIRED", "既に退職済みです");
+            }
+            
+            // 退職処理
+            employee.setEmploymentStatus(Employee.EmploymentStatus.RETIRED);
+            employee.setRetiredAt(retiredAt);
+            
+            Employee saved = employeeRepository.save(employee);
+            
+            return EmployeeOperationResult.success(saved, "退職処理が完了しました");
+            
+        } catch (Exception e) {
+            return EmployeeOperationResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
+    }
+    
+    /**
+     * 有給日数調整
+     */
+    public PaidLeaveAdjustmentResult adjustPaidLeave(Long employeeId, int adjustmentDays, String reason) {
+        try {
+            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
+            if (employeeOpt.isEmpty()) {
+                return PaidLeaveAdjustmentResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            
+            if (employee.getEmploymentStatus() == Employee.EmploymentStatus.RETIRED) {
+                return PaidLeaveAdjustmentResult.failure("RETIRED_EMPLOYEE", "退職者の有給日数は調整できません");
+            }
+            
+            int previousDays = employee.getPaidLeaveRemainingDays();
+            int newRemainingDays = previousDays + adjustmentDays;
+            
+            // 負数チェック
+            if (newRemainingDays < 0) {
+                return PaidLeaveAdjustmentResult.failure("INVALID_ADJUSTMENT", 
+                    "調整後の残日数が負数になります（現在残日数: " + previousDays + "日）");
+            }
+            
+            // 上限チェック（99日まで）
+            if (newRemainingDays > 99) {
+                return PaidLeaveAdjustmentResult.failure("INVALID_ADJUSTMENT", 
+                    "調整後の残日数が上限を超えます（上限: 99日）");
+            }
+            
+            // 有給日数更新
+            employee.setPaidLeaveRemainingDays(newRemainingDays);
+            Employee saved = employeeRepository.save(employee);
+            
+            return PaidLeaveAdjustmentResult.success(saved.getEmployeeId(), 
+                previousDays, adjustmentDays, newRemainingDays, "有給日数を調整しました");
+            
+        } catch (Exception e) {
+            return PaidLeaveAdjustmentResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
+    }
+    
+    /**
+     * パスワードリセット（管理者用）
+     */
+    public EmployeeOperationResult resetPassword(Long employeeId, String newPassword) {
+        try {
+            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
+            if (employeeOpt.isEmpty()) {
+                return EmployeeOperationResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
+            }
+            
+            Employee employee = employeeOpt.get();
+            
+            if (!validationUtil.isValidPassword(newPassword, employee.getEmployeeCode())) {
+                return EmployeeOperationResult.failure("VALIDATION_ERROR", "パスワードの形式が正しくありません");
+            }
+            
+            employee.setEmployeePasswordHash(passwordEncoder.encode(newPassword));
+            Employee saved = employeeRepository.save(employee);
+            
+            return EmployeeOperationResult.success(saved, "パスワードをリセットしました");
+            
+        } catch (Exception e) {
+            return EmployeeOperationResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+        }
+    }
+    
+    /**
+     * 社員操作結果クラス
+     */
+    public static class EmployeeOperationResult {
+        private final boolean success;
+        private final Employee employee;
+        private final String message;
+        private final String errorCode;
         
-        Employee employee = getEmployeeById(employeeId);
-        
-        if (employee.getEmploymentStatus() == Employee.EmploymentStatus.retired) {
-            log.warn("退職者への管理者権限付与試行 - employeeId: {}", employeeId);
-            throw new BusinessException("EMPLOYEE_RETIRED", "退職者には権限を付与できません");
+        private EmployeeOperationResult(boolean success, Employee employee, String message, String errorCode) {
+            this.success = success;
+            this.employee = employee;
+            this.message = message;
+            this.errorCode = errorCode;
         }
         
-        employee.setEmployeeRole(Employee.EmployeeRole.admin);
-        Employee savedEmployee = employeeRepository.save(employee);
+        public static EmployeeOperationResult success(Employee employee, String message) {
+            return new EmployeeOperationResult(true, employee, message, null);
+        }
         
-        log.info("管理者権限付与完了 - employeeId: {}, employeeCode: {}", 
-                employeeId, employee.getEmployeeCode());
+        public static EmployeeOperationResult failure(String errorCode, String message) {
+            return new EmployeeOperationResult(false, null, message, errorCode);
+        }
         
-        return savedEmployee;
+        // Getters
+        public boolean isSuccess() { return success; }
+        public Employee getEmployee() { return employee; }
+        public String getMessage() { return message; }
+        public String getErrorCode() { return errorCode; }
     }
     
     /**
-     * 管理者権限を削除
-     * 
-     * @param employeeId 社員ID
-     * @return 更新された社員エンティティ
-     * @throws BusinessException 社員が見つからない
+     * 有給調整結果クラス
      */
-    public Employee revokeAdminRole(Long employeeId) {
-        log.info("管理者権限削除 - employeeId: {}", employeeId);
+    public static class PaidLeaveAdjustmentResult {
+        private final boolean success;
+        private final Long employeeId;
+        private final Integer previousDays;
+        private final Integer adjustmentDays;
+        private final Integer newRemainingDays;
+        private final String message;
+        private final String errorCode;
         
-        Employee employee = getEmployeeById(employeeId);
-        employee.setEmployeeRole(Employee.EmployeeRole.employee);
-        Employee savedEmployee = employeeRepository.save(employee);
+        private PaidLeaveAdjustmentResult(boolean success, Long employeeId, Integer previousDays,
+                                        Integer adjustmentDays, Integer newRemainingDays,
+                                        String message, String errorCode) {
+            this.success = success;
+            this.employeeId = employeeId;
+            this.previousDays = previousDays;
+            this.adjustmentDays = adjustmentDays;
+            this.newRemainingDays = newRemainingDays;
+            this.message = message;
+            this.errorCode = errorCode;
+        }
         
-        log.info("管理者権限削除完了 - employeeId: {}, employeeCode: {}", 
-                employeeId, employee.getEmployeeCode());
+        public static PaidLeaveAdjustmentResult success(Long employeeId, Integer previousDays,
+                                                       Integer adjustmentDays, Integer newRemainingDays,
+                                                       String message) {
+            return new PaidLeaveAdjustmentResult(true, employeeId, previousDays, adjustmentDays,
+                                               newRemainingDays, message, null);
+        }
         
-        return savedEmployee;
+        public static PaidLeaveAdjustmentResult failure(String errorCode, String message) {
+            return new PaidLeaveAdjustmentResult(false, null, null, null, null, message, errorCode);
+        }
+        
+        // Getters
+        public boolean isSuccess() { return success; }
+        public Long getEmployeeId() { return employeeId; }
+        public Integer getPreviousDays() { return previousDays; }
+        public Integer getAdjustmentDays() { return adjustmentDays; }
+        public Integer getNewRemainingDays() { return newRemainingDays; }
+        public String getMessage() { return message; }
+        public String getErrorCode() { return errorCode; }
     }
 }

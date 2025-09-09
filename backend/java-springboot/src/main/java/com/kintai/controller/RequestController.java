@@ -1,18 +1,17 @@
 package com.kintai.controller;
 
-import com.kintai.dto.RequestDto;
-import com.kintai.entity.*;
-import com.kintai.exception.BusinessException;
+import com.kintai.dto.*;
+import com.kintai.entity.AdjustmentRequest;
+import com.kintai.entity.LeaveRequest;
 import com.kintai.service.AuthService;
 import com.kintai.service.RequestService;
-import com.kintai.service.EmployeeService;
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.servlet.http.HttpSession;
-import jakarta.validation.Valid;
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -26,49 +25,40 @@ public class RequestController {
     @Autowired
     private AuthService authService;
     
-    @Autowired
-    private EmployeeService employeeService;
-    
     /**
      * 有給申請
      */
     @PostMapping("/leave")
-    public ResponseEntity<Map<String, Object>> submitLeaveRequest(
-            @Valid @RequestBody RequestDto.LeaveRequestDto request,
+    public ResponseEntity<ApiResponse<Map<String, Object>>> submitLeaveRequest(
+            @Valid @RequestBody LeaveRequestDto request,
             HttpSession session) {
         
-        Map<String, Object> response = new HashMap<>();
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
+        }
         
-        try {
-            Employee currentEmployee = authService.getCurrentEmployee(session);
+        // 権限チェック（自分の申請のみ or 管理者）
+        if (!sessionInfo.getEmployeeId().equals(request.getEmployeeId()) && 
+            !"admin".equals(sessionInfo.getRole())) {
+            return ResponseEntity.status(403).body(
+                ApiResponse.error("ACCESS_DENIED", "アクセス権限がありません"));
+        }
+        
+        RequestService.RequestResult result = requestService.submitLeaveRequest(
+            request.getEmployeeId(), request.getLeaveDate(), request.getReason());
+        
+        if (result.isSuccess()) {
+            Map<String, Object> data = Map.of(
+                "leaveRequestId", result.getRequestId(),
+                "remainingDays", result.getRemainingDays()
+            );
             
-            // 権限チェック（本人のみ）
-            if (!currentEmployee.getEmployeeId().equals(request.getEmployeeId())) {
-                throw new BusinessException("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            LeaveRequest leaveRequest = requestService.submitLeaveRequest(
-                    request.getEmployeeId(), request.getLeaveDate(), request.getReason());
-            
-            // 更新後の残日数取得
-            Employee employee = employeeService.getEmployeeById(request.getEmployeeId());
-            
-            Map<String, Object> data = new HashMap<>();
-            data.put("leaveRequestId", leaveRequest.getLeaveRequestId());
-            data.put("remainingDays", employee.getPaidLeaveRemainingDays());
-            
-            response.put("success", true);
-            response.put("data", data);
-            response.put("message", String.format("有給申請が完了しました（残り%d日）", 
-                    employee.getPaidLeaveRemainingDays()));
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.ok(ApiResponse.success(data, result.getMessage()));
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error(result.getErrorCode(), result.getMessage()));
         }
     }
     
@@ -76,41 +66,47 @@ public class RequestController {
      * 打刻修正申請
      */
     @PostMapping("/adjustment")
-    public ResponseEntity<Map<String, Object>> submitAdjustmentRequest(
-            @Valid @RequestBody RequestDto.AdjustmentRequestDto request,
+    public ResponseEntity<ApiResponse<Map<String, Object>>> submitAdjustmentRequest(
+            @Valid @RequestBody AdjustmentRequestDto request,
             HttpSession session) {
         
-        Map<String, Object> response = new HashMap<>();
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
+        }
         
-        try {
-            Employee currentEmployee = authService.getCurrentEmployee(session);
+        // 権限チェック
+        if (!sessionInfo.getEmployeeId().equals(request.getEmployeeId()) && 
+            !"admin".equals(sessionInfo.getRole())) {
+            return ResponseEntity.status(403).body(
+                ApiResponse.error("ACCESS_DENIED", "アクセス権限がありません"));
+        }
+        
+        // 時刻をLocalDateTimeに変換
+        LocalDateTime correctedClockIn = null;
+        LocalDateTime correctedClockOut = null;
+        
+        if (request.getCorrectedClockInTime() != null) {
+            correctedClockIn = request.getTargetDate().atTime(request.getCorrectedClockInTime());
+        }
+        if (request.getCorrectedClockOutTime() != null) {
+            correctedClockOut = request.getTargetDate().atTime(request.getCorrectedClockOutTime());
+        }
+        
+        RequestService.RequestResult result = requestService.submitAdjustmentRequest(
+            request.getEmployeeId(), request.getTargetDate(), 
+            correctedClockIn, correctedClockOut, request.getReason());
+        
+        if (result.isSuccess()) {
+            Map<String, Object> data = Map.of(
+                "adjustmentRequestId", result.getRequestId()
+            );
             
-            // 権限チェック（本人のみ）
-            if (!currentEmployee.getEmployeeId().equals(request.getEmployeeId())) {
-                throw new BusinessException("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            AdjustmentRequest adjustmentRequest = requestService.submitAdjustmentRequest(
-                    request.getEmployeeId(),
-                    request.getTargetDate(),
-                    request.getCorrectedClockInTime(),
-                    request.getCorrectedClockOutTime(),
-                    request.getReason());
-            
-            Map<String, Object> data = new HashMap<>();
-            data.put("adjustmentRequestId", adjustmentRequest.getAdjustmentRequestId());
-            
-            response.put("success", true);
-            response.put("data", data);
-            response.put("message", "打刻修正申請が完了しました");
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.ok(ApiResponse.success(data, result.getMessage()));
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error(result.getErrorCode(), result.getMessage()));
         }
     }
     
@@ -118,122 +114,100 @@ public class RequestController {
      * 申請一覧取得（管理者用）
      */
     @GetMapping("/list")
-    public ResponseEntity<Map<String, Object>> getRequestList(
+    public ResponseEntity<ApiResponse<List<Object>>> getRequestList(
             @RequestParam(required = false) String requestType,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) String employeeName,
             HttpSession session) {
         
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            Employee currentEmployee = authService.getCurrentEmployee(session);
-            
-            // 管理者権限チェック
-            if (currentEmployee.getEmployeeRole() != Employee.EmployeeRole.admin) {
-                throw new BusinessException("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            List<Map<String, Object>> requestList = new java.util.ArrayList<>();
-            
-            // 有給申請一覧
-            if (requestType == null || "leave".equals(requestType)) {
-                List<LeaveRequest> leaveRequests = requestService.getLeaveRequests(employeeId, status);
-                for (LeaveRequest req : leaveRequests) {
-                    Employee employee = employeeService.getEmployeeById(req.getEmployeeId());
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("requestId", req.getLeaveRequestId());
-                    item.put("requestType", "leave");
-                    item.put("employeeId", req.getEmployeeId());
-                    item.put("employeeName", employee.getEmployeeName());
-                    item.put("requestDate", req.getLeaveRequestDate());
-                    item.put("reason", req.getLeaveRequestReason());
-                    item.put("status", req.getLeaveRequestStatus());
-                    item.put("createdAt", req.getCreatedAt());
-                    requestList.add(item);
-                }
-            }
-            
-            // 打刻修正申請一覧
-            if (requestType == null || "adjustment".equals(requestType)) {
-                List<AdjustmentRequest> adjustmentRequests = requestService.getAdjustmentRequests(employeeId, status);
-                for (AdjustmentRequest req : adjustmentRequests) {
-                    Employee employee = employeeService.getEmployeeById(req.getEmployeeId());
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("requestId", req.getAdjustmentRequestId());
-                    item.put("requestType", "adjustment");
-                    item.put("employeeId", req.getEmployeeId());
-                    item.put("employeeName", employee.getEmployeeName());
-                    item.put("requestDate", req.getAdjustmentTargetDate());
-                    item.put("reason", req.getAdjustmentReason());
-                    item.put("status", req.getAdjustmentStatus());
-                    item.put("createdAt", req.getCreatedAt());
-                    requestList.add(item);
-                }
-            }
-            
-            // 作成日時でソート
-            requestList.sort((a, b) -> 
-                ((java.time.LocalDateTime) b.get("createdAt"))
-                    .compareTo((java.time.LocalDateTime) a.get("createdAt")));
-            
-            response.put("success", true);
-            response.put("data", requestList);
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
         }
+        
+        // 管理者権限チェック
+        if (!"admin".equals(sessionInfo.getRole())) {
+            return ResponseEntity.status(403).body(
+                ApiResponse.error("ACCESS_DENIED", "管理者権限が必要です"));
+        }
+        
+        List<Object> requests = null;
+        
+        if ("leave".equals(requestType) || requestType == null) {
+            LeaveRequest.LeaveRequestStatus leaveStatus = null;
+            if (status != null) {
+                try {
+                    leaveStatus = LeaveRequest.LeaveRequestStatus.valueOf(status);
+                } catch (IllegalArgumentException e) {
+                    // 無効なステータスは無視
+                }
+            }
+            
+            List<LeaveRequest> leaveRequests = requestService.getLeaveRequestList(leaveStatus, employeeId, employeeName);
+            requests = List.of(leaveRequests.toArray());
+        } else if ("adjustment".equals(requestType)) {
+            AdjustmentRequest.AdjustmentStatus adjStatus = null;
+            if (status != null) {
+                try {
+                    adjStatus = AdjustmentRequest.AdjustmentStatus.valueOf(status);
+                } catch (IllegalArgumentException e) {
+                    // 無効なステータスは無視
+                }
+            }
+            
+            List<AdjustmentRequest> adjRequests = requestService.getAdjustmentRequestList(adjStatus, employeeId, employeeName);
+            requests = List.of(adjRequests.toArray());
+        }
+        
+        return ResponseEntity.ok(ApiResponse.success(requests));
     }
     
     /**
      * 申請承認
      */
     @PostMapping("/approve/{requestId}")
-    public ResponseEntity<Map<String, Object>> approveRequest(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> approveRequest(
             @PathVariable Long requestId,
             @RequestParam String requestType,
-            @Valid @RequestBody RequestDto.ApprovalRequest request,
+            @Valid @RequestBody ApprovalRequestDto request,
             HttpSession session) {
         
-        Map<String, Object> response = new HashMap<>();
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
+        }
         
-        try {
-            Employee currentEmployee = authService.getCurrentEmployee(session);
+        // 管理者権限チェック
+        if (!"admin".equals(sessionInfo.getRole())) {
+            return ResponseEntity.status(403).body(
+                ApiResponse.error("ACCESS_DENIED", "管理者権限が必要です"));
+        }
+        
+        RequestService.ApprovalResult result;
+        
+        if ("leave".equals(requestType)) {
+            result = requestService.approveLeaveRequest(requestId, request.getApproverId());
+        } else if ("adjustment".equals(requestType)) {
+            result = requestService.approveAdjustmentRequest(requestId, request.getApproverId());
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("INVALID_REQUEST_TYPE", "無効な申請種別です"));
+        }
+        
+        if (result.isSuccess()) {
+            Map<String, Object> data = Map.of(
+                "requestId", requestId,
+                "status", "approved",
+                "approvedAt", java.time.LocalDateTime.now()
+            );
             
-            // 管理者権限チェック
-            if (currentEmployee.getEmployeeRole() != Employee.EmployeeRole.admin) {
-                throw new BusinessException("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            if ("leave".equals(requestType)) {
-                requestService.approveLeaveRequest(requestId, request.getApproverId());
-            } else if ("adjustment".equals(requestType)) {
-                requestService.approveAdjustmentRequest(requestId, request.getApproverId());
-            } else {
-                throw new BusinessException("INVALID_REQUEST_TYPE", "不正な申請タイプです");
-            }
-            
-            Map<String, Object> data = new HashMap<>();
-            data.put("requestId", requestId);
-            data.put("status", "approved");
-            data.put("approvedAt", java.time.LocalDateTime.now());
-            
-            response.put("success", true);
-            response.put("data", data);
-            response.put("message", "申請を承認しました");
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.ok(ApiResponse.success(data, result.getMessage()));
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error(result.getErrorCode(), result.getMessage()));
         }
     }
     
@@ -241,47 +215,68 @@ public class RequestController {
      * 申請却下
      */
     @PostMapping("/reject/{requestId}")
-    public ResponseEntity<Map<String, Object>> rejectRequest(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> rejectRequest(
             @PathVariable Long requestId,
             @RequestParam String requestType,
-            @Valid @RequestBody RequestDto.RejectionRequest request,
+            @Valid @RequestBody RejectionRequestDto request,
             HttpSession session) {
         
-        Map<String, Object> response = new HashMap<>();
-        
-        try {
-            Employee currentEmployee = authService.getCurrentEmployee(session);
-            
-            // 管理者権限チェック
-            if (currentEmployee.getEmployeeRole() != Employee.EmployeeRole.admin) {
-                throw new BusinessException("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            if ("leave".equals(requestType)) {
-                requestService.rejectLeaveRequest(requestId, request.getApproverId());
-            } else if ("adjustment".equals(requestType)) {
-                requestService.rejectAdjustmentRequest(requestId, request.getApproverId(), 
-                        request.getRejectionReason());
-            } else {
-                throw new BusinessException("INVALID_REQUEST_TYPE", "不正な申請タイプです");
-            }
-            
-            Map<String, Object> data = new HashMap<>();
-            data.put("requestId", requestId);
-            data.put("status", "rejected");
-            data.put("rejectedAt", java.time.LocalDateTime.now());
-            
-            response.put("success", true);
-            response.put("data", data);
-            response.put("message", "申請を却下しました");
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (BusinessException e) {
-            response.put("success", false);
-            response.put("errorCode", e.getErrorCode());
-            response.put("message", e.getMessage());
-            return ResponseEntity.badRequest().body(response);
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
         }
+        
+        // 管理者権限チェック
+        if (!"admin".equals(sessionInfo.getRole())) {
+            return ResponseEntity.status(403).body(
+                ApiResponse.error("ACCESS_DENIED", "管理者権限が必要です"));
+        }
+        
+        RequestService.ApprovalResult result;
+        
+        if ("leave".equals(requestType)) {
+            result = requestService.rejectLeaveRequest(requestId, request.getApproverId(), request.getRejectionReason());
+        } else if ("adjustment".equals(requestType)) {
+            result = requestService.rejectAdjustmentRequest(requestId, request.getApproverId(), request.getRejectionReason());
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("INVALID_REQUEST_TYPE", "無効な申請種別です"));
+        }
+        
+        if (result.isSuccess()) {
+            Map<String, Object> data = Map.of(
+                "requestId", requestId,
+                "status", "rejected",
+                "rejectedAt", java.time.LocalDateTime.now()
+            );
+            
+            return ResponseEntity.ok(ApiResponse.success(data, result.getMessage()));
+        } else {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error(result.getErrorCode(), result.getMessage()));
+        }
+    }
+    
+    /**
+     * 社員の申請履歴取得
+     */
+    @GetMapping("/my-history")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMyRequestHistory(
+            @RequestParam(required = false) String requestType,
+            HttpSession session) {
+        
+        AuthService.SessionInfo sessionInfo = authService.getSessionInfo(session);
+        if (sessionInfo == null) {
+            return ResponseEntity.status(401).body(
+                ApiResponse.error("SESSION_TIMEOUT", "セッションがタイムアウトしました"));
+        }
+        
+        Map<String, Object> history = Map.of(
+            "leaveRequests", requestService.getEmployeeLeaveHistory(sessionInfo.getEmployeeId()),
+            "adjustmentRequests", requestService.getEmployeeAdjustmentHistory(sessionInfo.getEmployeeId())
+        );
+        
+        return ResponseEntity.ok(ApiResponse.success(history));
     }
 }
