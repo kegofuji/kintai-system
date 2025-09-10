@@ -150,6 +150,9 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+  sql:
+    init:
+      mode: never
     
 logging:
   level:
@@ -212,3 +215,6 @@ spring:
   h2:
     console:
       enabled: true
+  sql:
+    init:
+      mode: never
