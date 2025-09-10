@@ -28,8 +28,7 @@ public class RequestService {
     @Autowired
     private EmployeeRepository employeeRepository;
     
-    @Autowired
-    private TimeCalculator timeCalculator;
+    
     
     /**
      * 有給申請
@@ -168,47 +167,12 @@ public class RequestService {
             employee.setPaidLeaveRemainingDays(employee.getPaidLeaveRemainingDays() - 1);
             employeeRepository.save(employee);
             
-    /**
-     * 有給申請承認（設計書通りの処理）
-     */
-    public ApprovalResult approveLeaveRequest(Long requestId, Long approverId) {
-        try {
-            Optional<LeaveRequest> requestOpt = leaveRequestRepository.findById(requestId);
-            if (requestOpt.isEmpty()) {
-                return ApprovalResult.failure("REQUEST_NOT_FOUND", "申請が見つかりません");
-            }
-            
-            LeaveRequest request = requestOpt.get();
-            if (!request.isPending()) {
-                return ApprovalResult.failure("INVALID_STATUS", "処理済みの申請です");
-            }
-            
-            // 社員の有給残日数チェック
-            Optional<Employee> employeeOpt = employeeRepository.findById(request.getEmployeeId());
-            if (employeeOpt.isEmpty()) {
-                return ApprovalResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-            }
-            
-            Employee employee = employeeOpt.get();
-            if (employee.getPaidLeaveRemainingDays() <= 0) {
-                return ApprovalResult.failure("INSUFFICIENT_LEAVE_DAYS", "有給残日数が不足しています");
-            }
-            
-            // 承認処理
-            request.approve(approverId);
-            leaveRequestRepository.save(request);
-            
-            // 有給残日数減算（設計書通り：承認時に残日数を減算）
-            employee.setPaidLeaveRemainingDays(employee.getPaidLeaveRemainingDays() - 1);
-            employeeRepository.save(employee);
-            
-            // 勤怠レコードに有給記録作成（設計書通り：有給承認時はその日の勤務は0）
+            // 勤怠レコードに有給記録作成
             AttendanceRecord attendanceRecord = attendanceRecordRepository
                 .findByEmployeeIdAndAttendanceDate(employee.getEmployeeId(), request.getLeaveRequestDate())
                 .orElse(new AttendanceRecord(employee.getEmployeeId(), request.getLeaveRequestDate()));
             
             attendanceRecord.setAttendanceStatus(AttendanceRecord.AttendanceStatus.PAID_LEAVE);
-            // 有給の場合は時刻関連は全て0またはnull
             attendanceRecord.setClockInTime(null);
             attendanceRecord.setClockOutTime(null);
             attendanceRecord.setLateMinutes(0);
@@ -290,7 +254,7 @@ public class RequestService {
             // 時間の再計算
             if (record.hasClockInTime() && record.hasClockOutTime()) {
                 TimeCalculator.AttendanceCalculationResult calculation = 
-                    timeCalculator.calculateAttendanceTimes(record.getClockInTime(), record.getClockOutTime());
+                    TimeCalculator.calculateAttendanceTimes(record.getClockInTime(), record.getClockOutTime());
                 
                 record.setLateMinutes(calculation.getLateMinutes());
                 record.setEarlyLeaveMinutes(calculation.getEarlyLeaveMinutes());

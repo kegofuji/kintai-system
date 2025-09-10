@@ -19,8 +19,7 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    @Autowired
-    private ValidationUtil validationUtil;
+    
     
     /**
      * ログイン認証
@@ -99,7 +98,7 @@ public class AuthService {
         }
         
         // 新しいパスワードの検証
-        if (!validationUtil.isValidPassword(newPassword, employee.getEmployeeCode())) {
+        if (!ValidationUtil.isValidPassword(newPassword, employee.getEmployeeCode())) {
             throw new IllegalArgumentException("パスワードの形式が正しくありません");
         }
         

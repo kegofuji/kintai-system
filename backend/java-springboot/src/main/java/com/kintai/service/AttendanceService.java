@@ -26,18 +26,14 @@ public class AttendanceService {
     @Autowired
     private EmployeeRepository employeeRepository;
     
-    @Autowired
-    private TimeCalculator timeCalculator;
     
-    @Autowired
-    private DateUtil dateUtil;
     
     /**
      * 出勤打刻（設計書通りの業務仕様）
      */
     public ClockResult clockIn(Long employeeId) {
         try {
-            LocalDateTime now = dateUtil.nowInJapan();
+            LocalDateTime now = DateUtil.nowInJapan();
             LocalDate today = now.toLocalDate();
             
             // 社員存在チェック
@@ -72,7 +68,7 @@ public class AttendanceService {
             record.setClockInTime(now);
             
             // 遅刻計算
-            int lateMinutes = timeCalculator.calculateLateMinutes(now);
+            int lateMinutes = TimeCalculator.calculateLateMinutes(now);
             record.setLateMinutes(lateMinutes);
             
             AttendanceRecord saved = attendanceRecordRepository.save(record);
@@ -93,7 +89,7 @@ public class AttendanceService {
      */
     public ClockResult clockOut(Long employeeId) {
         try {
-            LocalDateTime now = dateUtil.nowInJapan();
+            LocalDateTime now = DateUtil.nowInJapan();
             LocalDate today = now.toLocalDate();
             
             // 出勤記録チェック
@@ -119,7 +115,7 @@ public class AttendanceService {
             
             // 各種時間計算（設計書通りの計算）
             TimeCalculator.AttendanceCalculationResult calculation = 
-                timeCalculator.calculateAttendanceTimes(record.getClockInTime(), now);
+                TimeCalculator.calculateAttendanceTimes(record.getClockInTime(), now);
             
             record.setEarlyLeaveMinutes(calculation.getEarlyLeaveMinutes());
             record.setOvertimeMinutes(calculation.getOvertimeMinutes());
@@ -162,7 +158,7 @@ public class AttendanceService {
     public SubmissionResult submitMonthlyAttendance(Long employeeId, YearMonth yearMonth) {
         try {
             // 営業日一覧取得
-            List<LocalDate> workingDays = dateUtil.getWorkingDaysInMonth(
+            List<LocalDate> workingDays = DateUtil.getWorkingDaysInMonth(
                 yearMonth.getYear(), yearMonth.getMonthValue());
             
             // 該当月のレコード取得
@@ -206,12 +202,11 @@ public class AttendanceService {
             }
             
             // 申請済みに更新
-            long updatedCount = 0;
+            // 申請状態更新
             for (AttendanceRecord record : monthlyRecords) {
                 if (record.getSubmissionStatus() == AttendanceRecord.SubmissionStatus.未提出) {
                     record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.申請済);
                     attendanceRecordRepository.save(record);
-                    updatedCount++;
                 }
             }
             

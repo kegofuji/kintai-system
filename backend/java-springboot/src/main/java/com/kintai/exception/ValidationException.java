@@ -1,6 +1,5 @@
 package com.kintai.exception;
 
-import java.util.List;
 import java.util.Map;
 
 public class ValidationException extends RuntimeException {

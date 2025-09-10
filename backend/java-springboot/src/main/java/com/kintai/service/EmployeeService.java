@@ -22,8 +22,7 @@ public class EmployeeService {
     @Autowired
     private PasswordEncoder passwordEncoder;
     
-    @Autowired
-    private ValidationUtil validationUtil;
+    
     
     /**
      * 社員一覧取得
@@ -72,15 +71,15 @@ public class EmployeeService {
                                              String password, String role, LocalDate hiredAt) {
         try {
             // バリデーション
-            if (!validationUtil.isValidEmployeeCode(employeeCode)) {
+            if (!ValidationUtil.isValidEmployeeCode(employeeCode)) {
                 return EmployeeOperationResult.failure("VALIDATION_ERROR", "社員コードの形式が正しくありません");
             }
             
-            if (!validationUtil.isValidEmail(email)) {
+            if (!ValidationUtil.isValidEmail(email)) {
                 return EmployeeOperationResult.failure("VALIDATION_ERROR", "メールアドレスの形式が正しくありません");
             }
             
-            if (!validationUtil.isValidPassword(password, employeeCode)) {
+            if (!ValidationUtil.isValidPassword(password, employeeCode)) {
                 return EmployeeOperationResult.failure("VALIDATION_ERROR", "パスワードの形式が正しくありません");
             }
             
@@ -131,7 +130,7 @@ public class EmployeeService {
             }
             
             // バリデーション
-            if (!validationUtil.isValidEmail(email)) {
+            if (!ValidationUtil.isValidEmail(email)) {
                 return EmployeeOperationResult.failure("VALIDATION_ERROR", "メールアドレスの形式が正しくありません");
             }
             
@@ -235,7 +234,7 @@ public class EmployeeService {
             
             Employee employee = employeeOpt.get();
             
-            if (!validationUtil.isValidPassword(newPassword, employee.getEmployeeCode())) {
+            if (!ValidationUtil.isValidPassword(newPassword, employee.getEmployeeCode())) {
                 return EmployeeOperationResult.failure("VALIDATION_ERROR", "パスワードの形式が正しくありません");
             }
             

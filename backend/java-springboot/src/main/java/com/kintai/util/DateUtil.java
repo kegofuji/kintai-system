@@ -3,6 +3,8 @@ package com.kintai.util;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -97,5 +99,36 @@ public class DateUtil {
         LocalDate today = LocalDate.now();
         String currentYearMonth = formatYearMonth(today);
         return currentYearMonth.equals(yearMonth);
+    }
+
+    public static YearMonth parseYearMonth(String yearMonth) {
+        return YearMonth.parse(yearMonth, YEAR_MONTH_FORMATTER);
+    }
+
+    public static LocalDate getFirstDayOfMonth(YearMonth ym) {
+        return ym.atDay(1);
+    }
+
+    public static LocalDate getLastDayOfMonth(YearMonth ym) {
+        return ym.atEndOfMonth();
+    }
+
+    public static LocalDate todayInJapan() {
+        return LocalDate.now(ZoneId.of("Asia/Tokyo"));
+    }
+
+    /**
+     * 現在日時（日本時間）を返す
+     */
+    public static LocalDateTime nowInJapan() {
+        return LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+    }
+
+    /**
+     * 指定した年月の営業日一覧を返す（年と月で指定）
+     */
+    public static List<LocalDate> getWorkingDaysInMonth(int year, int month) {
+        YearMonth ym = YearMonth.of(year, month);
+        return getWorkingDays(ym.toString());
     }
 }
