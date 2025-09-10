@@ -19,3 +19,4 @@ public class LoginResponse {
     public String getSessionToken() { return sessionToken; }
 }
 
+

@@ -15,3 +15,4 @@ public class RejectionRequestDto {
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 }
 
+

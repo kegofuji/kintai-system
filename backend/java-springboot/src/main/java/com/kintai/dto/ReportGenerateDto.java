@@ -10,3 +10,4 @@ public class ReportGenerateDto {
     public void setYearMonth(String yearMonth) { this.yearMonth = yearMonth; }
 }
 
+
