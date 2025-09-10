@@ -80,7 +80,7 @@ public class AdjustmentRequest {
     @JoinColumn(name = "approved_by_employee_id", insertable = false, updatable = false)
     private Employee approvedBy;
     
-    // Enums
+    // Enums - 設計書通りの日本語ステータス
     public enum AdjustmentStatus {
         未処理("未処理"), 承認("承認"), 却下("却下");
         

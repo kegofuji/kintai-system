@@ -33,7 +33,7 @@ public class AttendanceService {
     private DateUtil dateUtil;
     
     /**
-     * 出勤打刻
+     * 出勤打刻（設計書通りの業務仕様）
      */
     public ClockResult clockIn(Long employeeId) {
         try {
@@ -46,12 +46,25 @@ public class AttendanceService {
                 return ClockResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
             }
             
+            Employee employee = employeeOpt.get();
+            
+            // 在籍状況チェック
+            if (!employee.isActive()) {
+                return ClockResult.failure("ACCESS_DENIED", "アクセス権限がありません");
+            }
+            
             // 既存レコードチェック
             Optional<AttendanceRecord> existingRecord = 
                 attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, today);
             
-            if (existingRecord.isPresent() && existingRecord.get().hasClockInTime()) {
-                return ClockResult.failure("ALREADY_CLOCKED_IN", "本日は既に出勤打刻済みです");
+            if (existingRecord.isPresent()) {
+                AttendanceRecord record = existingRecord.get();
+                if (record.hasClockInTime()) {
+                    return ClockResult.failure("ALREADY_CLOCKED_IN", "既に出勤打刻済みです");
+                }
+                if (record.isFixed()) {
+                    return ClockResult.failure("FIXED_ATTENDANCE", "確定済のため変更できません");
+                }
             }
             
             // レコード作成または更新
@@ -76,7 +89,7 @@ public class AttendanceService {
     }
     
     /**
-     * 退勤打刻
+     * 退勤打刻（設計書通りの業務仕様）
      */
     public ClockResult clockOut(Long employeeId) {
         try {
@@ -97,10 +110,14 @@ public class AttendanceService {
                 return ClockResult.failure("ALREADY_CLOCKED_OUT", "本日は既に退勤打刻済みです");
             }
             
+            if (record.isFixed()) {
+                return ClockResult.failure("FIXED_ATTENDANCE", "確定済のため変更できません");
+            }
+            
             // 退勤時刻設定
             record.setClockOutTime(now);
             
-            // 各種時間計算
+            // 各種時間計算（設計書通りの計算）
             TimeCalculator.AttendanceCalculationResult calculation = 
                 timeCalculator.calculateAttendanceTimes(record.getClockInTime(), now);
             
@@ -137,29 +154,66 @@ public class AttendanceService {
     }
     
     /**
-     * 月末申請
+     * 月末申請（設計書通りの業務仕様）
+     * 1. 当月打刻漏れがないことが条件
+     * 2. 申請後は submission_status = '申請済'に設定
+     * 3. 管理者承認時は attendance_fixed_flag=1（勤怠データ確定）
      */
     public SubmissionResult submitMonthlyAttendance(Long employeeId, YearMonth yearMonth) {
         try {
-            // 打刻漏れチェック
-            List<AttendanceRecord> incompleteRecords = attendanceRecordRepository
-                .findIncompleteAttendanceByEmployeeIdAndYearMonth(
-                    employeeId, yearMonth.getYear(), yearMonth.getMonthValue());
-            
-            if (!incompleteRecords.isEmpty()) {
-                List<LocalDate> missingDates = incompleteRecords.stream()
-                    .map(AttendanceRecord::getAttendanceDate)
-                    .toList();
-                return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
-                    "打刻漏れがあります", missingDates);
-            }
+            // 営業日一覧取得
+            List<LocalDate> workingDays = dateUtil.getWorkingDaysInMonth(
+                yearMonth.getYear(), yearMonth.getMonthValue());
             
             // 該当月のレコード取得
             List<AttendanceRecord> monthlyRecords = getMonthlyAttendance(employeeId, yearMonth);
             
-            // 営業日数チェック
-            List<LocalDate> workingDays = dateUtil.getWorkingDaysInMonth(
-                yearMonth.getYear(), yearMonth.getMonthValue());
+            // 打刻漏れチェック（設計書仕様通り）
+            for (LocalDate workingDay : workingDays) {
+                AttendanceRecord record = monthlyRecords.stream()
+                    .filter(r -> r.getAttendanceDate().equals(workingDay))
+                    .findFirst()
+                    .orElse(null);
+                
+                if (record == null) {
+                    return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
+                        "打刻漏れがあります", List.of(workingDay));
+                }
+                
+                // 有給の場合は打刻不要
+                if (record.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.PAID_LEAVE) {
+                    continue;
+                }
+                
+                // 通常勤務日の場合、出勤・退勤時刻が必須
+                if (!record.isCompleteAttendance()) {
+                    return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
+                        "出勤または退勤の打刻が不足しています", List.of(workingDay));
+                }
+            }
+            
+            // 欠勤日がある場合は申請不可
+            List<AttendanceRecord> absentRecords = monthlyRecords.stream()
+                .filter(r -> r.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.ABSENT)
+                .toList();
+            
+            if (!absentRecords.isEmpty()) {
+                List<LocalDate> absentDates = absentRecords.stream()
+                    .map(AttendanceRecord::getAttendanceDate)
+                    .toList();
+                return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
+                    "欠勤日があるため申請できません", absentDates);
+            }
+            
+            // 申請済みに更新
+            long updatedCount = 0;
+            for (AttendanceRecord record : monthlyRecords) {
+                if (record.getSubmissionStatus() == AttendanceRecord.SubmissionStatus.未提出) {
+                    record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.申請済);
+                    attendanceRecordRepository.save(record);
+                    updatedCount++;
+                }
+            }
             
             long workingDaysCount = workingDays.size();
             long completedDaysCount = monthlyRecords.stream()
@@ -169,18 +223,6 @@ public class AttendanceService {
                 .filter(r -> r.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.PAID_LEAVE)
                 .count();
             
-            if (completedDaysCount + paidLeaveDaysCount < workingDaysCount) {
-                return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", "必要な勤務日数が不足しています", null);
-            }
-            
-            // 申請済みに更新
-            for (AttendanceRecord record : monthlyRecords) {
-                if (record.getSubmissionStatus() == AttendanceRecord.SubmissionStatus.未提出) {
-                    record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.申請済);
-                    attendanceRecordRepository.save(record);
-                }
-            }
-            
             return SubmissionResult.success(workingDaysCount, completedDaysCount, paidLeaveDaysCount);
             
         } catch (Exception e) {
@@ -189,7 +231,50 @@ public class AttendanceService {
     }
     
     /**
-     * 勤怠集計
+     * 月末申請承認（管理者用）
+     */
+    public boolean approveMonthlySubmission(Long employeeId, YearMonth yearMonth, Long approverId) {
+        try {
+            List<AttendanceRecord> records = attendanceRecordRepository
+                .findByEmployeeIdAndYearMonthAndSubmissionStatus(
+                    employeeId, yearMonth.getYear(), yearMonth.getMonthValue(), 
+                    AttendanceRecord.SubmissionStatus.申請済);
+            
+            for (AttendanceRecord record : records) {
+                record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.承認);
+                record.setAttendanceFixedFlag(true); // 勤怠データ確定
+                attendanceRecordRepository.save(record);
+            }
+            
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * 月末申請却下（管理者用）
+     */
+    public boolean rejectMonthlySubmission(Long employeeId, YearMonth yearMonth, Long approverId) {
+        try {
+            List<AttendanceRecord> records = attendanceRecordRepository
+                .findByEmployeeIdAndYearMonthAndSubmissionStatus(
+                    employeeId, yearMonth.getYear(), yearMonth.getMonthValue(), 
+                    AttendanceRecord.SubmissionStatus.申請済);
+            
+            for (AttendanceRecord record : records) {
+                record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.却下);
+                attendanceRecordRepository.save(record);
+            }
+            
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * 勤怠集計（設計書通りの項目）
      */
     @Transactional(readOnly = true)
     public AttendanceSummary getAttendanceSummary(Long employeeId, LocalDate fromDate, LocalDate toDate) {
