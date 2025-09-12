@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 public class RequestDto {
     
-    // Clock In/Out Request
+
     public static class ClockRequest {
         @NotNull(message = "社員IDは必須です")
         private Long employeeId;
@@ -18,7 +18,7 @@ public class RequestDto {
         public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
     }
     
-    // Monthly Submission Request
+
     public static class MonthlySubmissionRequest {
         @NotNull(message = "社員IDは必須です")
         private Long employeeId;
@@ -36,7 +36,7 @@ public class RequestDto {
         public void setTargetMonth(String targetMonth) { this.targetMonth = targetMonth; }
     }
     
-    // Leave Request
+
     public static class LeaveRequestDto {
         @NotNull(message = "社員IDは必須です")
         private Long employeeId;
@@ -61,7 +61,7 @@ public class RequestDto {
         public void setReason(String reason) { this.reason = reason; }
     }
     
-    // Adjustment Request
+
     public static class AdjustmentRequestDto {
         @NotNull(message = "社員IDは必須です")
         private Long employeeId;
@@ -105,7 +105,7 @@ public class RequestDto {
         public void setReason(String reason) { this.reason = reason; }
     }
     
-    // Approval Request
+
     public static class ApprovalRequest {
         @NotNull(message = "承認者IDは必須です")
         private Long approverId;
@@ -121,7 +121,7 @@ public class RequestDto {
         public void setComment(String comment) { this.comment = comment; }
     }
     
-    // Rejection Request
+
     public static class RejectionRequest {
         @NotNull(message = "承認者IDは必須です")
         private Long approverId;
@@ -139,7 +139,7 @@ public class RequestDto {
         public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
     }
     
-    // Employee Registration Request
+  
     public static class EmployeeRegistrationRequest {
         @NotBlank(message = "社員IDは必須です")
         @Size(min = 3, max = 10, message = "社員IDは3-10文字の半角英数字で入力してください")
@@ -174,7 +174,6 @@ public class RequestDto {
         public void setPassword(String password) { this.password = password; }
     }
     
-    // Paid Leave Adjustment Request
     public static class PaidLeaveAdjustmentRequest {
         @NotNull(message = "社員IDは必須です")
         private Long employeeId;

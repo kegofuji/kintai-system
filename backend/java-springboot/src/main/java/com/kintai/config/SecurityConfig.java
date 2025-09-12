@@ -7,6 +7,8 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -35,12 +37,19 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                .requestMatchers(HttpMethod.GET, "/", "/login", "/index.html").permitAll()
-                .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/attendance/**", "/api/requests/**").hasAnyRole("EMPLOYEE", "ADMIN")
-                .requestMatchers("/api/auth/logout", "/api/auth/session").authenticated()
+                .requestMatchers(new AntPathRequestMatcher("/api/auth/login", "POST")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/", "GET")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/login", "GET")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/index.html", "GET")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/css/**")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/js/**")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/images/**")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/h2-console/**")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/admin/**")).hasRole("ADMIN")
+                .requestMatchers(new AntPathRequestMatcher("/api/attendance/**")).hasAnyRole("EMPLOYEE", "ADMIN")
+                .requestMatchers(new AntPathRequestMatcher("/api/requests/**")).hasAnyRole("EMPLOYEE", "ADMIN")
+                .requestMatchers(new AntPathRequestMatcher("/api/auth/logout")).authenticated()
+                .requestMatchers(new AntPathRequestMatcher("/api/auth/session")).authenticated()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form.disable())
@@ -49,6 +58,9 @@ public class SecurityConfig {
                 .logoutSuccessUrl("/login")
                 .invalidateHttpSession(true)
                 .deleteCookies("JSESSIONID")
+            )
+            .headers(headers -> headers
+                .frameOptions().disable()
             );
 
         return http.build();

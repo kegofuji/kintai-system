@@ -159,8 +159,7 @@ public class AuthService {
             this.role = role;
             this.remainingTime = remainingTime;
         }
-        
-        // Getters
+
         public Long getEmployeeId() { return employeeId; }
         public String getEmployeeName() { return employeeName; }
         public String getRole() { return role; }

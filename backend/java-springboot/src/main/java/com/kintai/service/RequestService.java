@@ -29,7 +29,6 @@ public class RequestService {
     private EmployeeRepository employeeRepository;
     
     
-    
     /**
      * 有給申請
      */
@@ -167,26 +166,13 @@ public class RequestService {
             employee.setPaidLeaveRemainingDays(employee.getPaidLeaveRemainingDays() - 1);
             employeeRepository.save(employee);
             
-            // 勤怠レコードに有給記録作成
-            AttendanceRecord attendanceRecord = attendanceRecordRepository
-                .findByEmployeeIdAndAttendanceDate(employee.getEmployeeId(), request.getLeaveRequestDate())
-                .orElse(new AttendanceRecord(employee.getEmployeeId(), request.getLeaveRequestDate()));
-            
-            attendanceRecord.setAttendanceStatus(AttendanceRecord.AttendanceStatus.PAID_LEAVE);
-            attendanceRecord.setClockInTime(null);
-            attendanceRecord.setClockOutTime(null);
-            attendanceRecord.setLateMinutes(0);
-            attendanceRecord.setEarlyLeaveMinutes(0);
-            attendanceRecord.setOvertimeMinutes(0);
-            attendanceRecord.setNightShiftMinutes(0);
-            attendanceRecordRepository.save(attendanceRecord);
-            
             return ApprovalResult.success("有給申請を承認しました");
             
         } catch (Exception e) {
             return ApprovalResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
         }
     }
+    
     
     /**
      * 有給申請却下
@@ -349,7 +335,7 @@ public class RequestService {
             return new RequestResult(false, null, null, message, errorCode);
         }
         
-        // Getters
+    
         public boolean isSuccess() { return success; }
         public Long getRequestId() { return requestId; }
         public Integer getRemainingDays() { return remainingDays; }
@@ -379,7 +365,7 @@ public class RequestService {
             return new ApprovalResult(false, message, errorCode);
         }
         
-        // Getters
+    
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
         public String getErrorCode() { return errorCode; }

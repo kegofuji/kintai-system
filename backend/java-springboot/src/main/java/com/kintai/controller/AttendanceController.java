@@ -149,7 +149,7 @@ public class AttendanceController {
             List<AttendanceRecord> records = attendanceService.getAttendanceHistory(targetEmployeeId, fromDate, toDate);
             AttendanceService.AttendanceSummary summary = attendanceService.getAttendanceSummary(targetEmployeeId, fromDate, toDate);
             
-            // 社員情報取得（実装は簡略化）
+            // 社員情報取得
             AttendanceHistoryResponse.EmployeeInfo employeeInfo = 
                 new AttendanceHistoryResponse.EmployeeInfo(targetEmployeeId, sessionInfo.getEmployeeName(), "E" + String.format("%03d", targetEmployeeId));
             

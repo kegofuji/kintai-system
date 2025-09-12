@@ -272,7 +272,7 @@ public class EmployeeService {
             return new EmployeeOperationResult(false, null, message, errorCode);
         }
         
-        // Getters
+        
         public boolean isSuccess() { return success; }
         public Employee getEmployee() { return employee; }
         public String getMessage() { return message; }
@@ -314,7 +314,7 @@ public class EmployeeService {
             return new PaidLeaveAdjustmentResult(false, null, null, null, null, message, errorCode);
         }
         
-        // Getters
+        
         public boolean isSuccess() { return success; }
         public Long getEmployeeId() { return employeeId; }
         public Integer getPreviousDays() { return previousDays; }

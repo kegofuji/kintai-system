@@ -71,7 +71,7 @@ public class Employee {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
     
-    // Enums - 設計書通りの値を使用
+  
     public enum EmployeeRole {
         EMPLOYEE("employee"), ADMIN("admin");
         
@@ -88,7 +88,7 @@ public class Employee {
         public String getValue() { return value; }
     }
     
-    // Constructors
+
     public Employee() {}
     
     public Employee(String employeeCode, String employeeName, String email, 
@@ -101,7 +101,7 @@ public class Employee {
         this.hiredAt = hiredAt;
     }
     
-    // Getters and Setters
+
     public Long getEmployeeId() { return employeeId; }
     public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
     
@@ -138,7 +138,7 @@ public class Employee {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     
-    // Helper methods
+  
     public boolean isActive() {
         return employmentStatus == EmploymentStatus.ACTIVE;
     }

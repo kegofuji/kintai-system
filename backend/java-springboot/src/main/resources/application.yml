@@ -2,14 +2,12 @@ spring:
   application:
     name: kintai-system
 
-  # Database Configuration
   datasource:
     url: ${DATABASE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8}
     username: ${DATABASE_USERNAME:kintai_user}
     password: ${DATABASE_PASSWORD:kintai_password}
     driver-class-name: com.mysql.cj.jdbc.Driver
     
-  # JPA Configuration  
   jpa:
     hibernate:
       ddl-auto: update
@@ -24,37 +22,31 @@ spring:
         timezone: Asia/Tokyo
     show-sql: false
     
-  # Session Configuration
   session:
     store-type: none
     timeout: 10m
     
-  # Security Configuration
   security:
     user:
       name: admin
       password: admin123
       roles: ADMIN
       
-  # Web Configuration
   web:
     resources:
       static-locations: classpath:/static/
       cache:
         period: 3600
         
-  # Jackson Configuration (JSON)
   jackson:
     time-zone: Asia/Tokyo
     date-format: yyyy-MM-dd HH:mm:ss
     serialization:
       write-dates-as-timestamps: false
       
-  # Validation Configuration
   validation:
     enabled: true
 
-# Server Configuration
 server:
   port: ${PORT:8080}
   servlet:
@@ -68,14 +60,12 @@ server:
         same-site: lax
         max-age: 600
         
-  # Error Configuration
   error:
     whitelabel:
       enabled: false
     include-stacktrace: never
     include-message: always
 
-# Logging Configuration
 logging:
   level:
     com.kintai: INFO
@@ -90,7 +80,6 @@ logging:
     max-size: 10MB
     max-history: 30
 
-# Management Configuration (Actuator)
 management:
   endpoints:
     web:
@@ -100,7 +89,6 @@ management:
     health:
       show-details: when_authorized
       
-# Custom Application Properties
 kintai:
   # 勤怠管理設定
   attendance:
@@ -137,19 +125,28 @@ kintai:
     paid-leave-initial-days: 10
 
 ---
-# Development Profile
 spring:
   config:
     activate:
       on-profile: development
       
   datasource:
-    url: jdbc:mysql://localhost:3306/kintai_db_dev?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: KINTAI_USER
+    password: KINTAI_PASSWORD
     
   jpa:
     hibernate:
       ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
     show-sql: true
+    
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      
   sql:
     init:
       mode: never
@@ -165,7 +162,6 @@ server:
     include-stacktrace: always
 
 ---
-# Production Profile  
 spring:
   config:
     activate:
@@ -195,7 +191,6 @@ server:
     include-stacktrace: never
 
 ---
-# Test Profile
 spring:
   config:
     activate:

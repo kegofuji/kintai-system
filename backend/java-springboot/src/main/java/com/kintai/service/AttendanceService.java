@@ -27,9 +27,8 @@ public class AttendanceService {
     private EmployeeRepository employeeRepository;
     
     
-    
     /**
-     * 出勤打刻（設計書通りの業務仕様）
+     * 出勤打刻
      */
     public ClockResult clockIn(Long employeeId) {
         try {
@@ -85,7 +84,7 @@ public class AttendanceService {
     }
     
     /**
-     * 退勤打刻（設計書通りの業務仕様）
+     * 退勤打刻
      */
     public ClockResult clockOut(Long employeeId) {
         try {
@@ -113,7 +112,7 @@ public class AttendanceService {
             // 退勤時刻設定
             record.setClockOutTime(now);
             
-            // 各種時間計算（設計書通りの計算）
+            // 各種時間計算
             TimeCalculator.AttendanceCalculationResult calculation = 
                 TimeCalculator.calculateAttendanceTimes(record.getClockInTime(), now);
             
@@ -150,7 +149,7 @@ public class AttendanceService {
     }
     
     /**
-     * 月末申請（設計書通りの業務仕様）
+     * 月末申請
      * 1. 当月打刻漏れがないことが条件
      * 2. 申請後は submission_status = '申請済'に設定
      * 3. 管理者承認時は attendance_fixed_flag=1（勤怠データ確定）
@@ -164,7 +163,7 @@ public class AttendanceService {
             // 該当月のレコード取得
             List<AttendanceRecord> monthlyRecords = getMonthlyAttendance(employeeId, yearMonth);
             
-            // 打刻漏れチェック（設計書仕様通り）
+            // 打刻漏れチェック
             for (LocalDate workingDay : workingDays) {
                 AttendanceRecord record = monthlyRecords.stream()
                     .filter(r -> r.getAttendanceDate().equals(workingDay))
@@ -202,7 +201,6 @@ public class AttendanceService {
             }
             
             // 申請済みに更新
-            // 申請状態更新
             for (AttendanceRecord record : monthlyRecords) {
                 if (record.getSubmissionStatus() == AttendanceRecord.SubmissionStatus.未提出) {
                     record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.申請済);
@@ -269,7 +267,7 @@ public class AttendanceService {
     }
     
     /**
-     * 勤怠集計（設計書通りの項目）
+     * 勤怠集計
      */
     @Transactional(readOnly = true)
     public AttendanceSummary getAttendanceSummary(Long employeeId, LocalDate fromDate, LocalDate toDate) {
@@ -363,7 +361,7 @@ public class AttendanceService {
             return new SubmissionResult(false, errorCode, message, missingDates, null, null, null);
         }
         
-        // Getters
+
         public boolean isSuccess() { return success; }
         public String getErrorCode() { return errorCode; }
         public String getMessage() { return message; }
@@ -395,7 +393,7 @@ public class AttendanceService {
             this.absentDays = absentDays;
         }
         
-        // Getters
+    
         public int getTotalLateMinutes() { return totalLateMinutes; }
         public int getTotalEarlyLeaveMinutes() { return totalEarlyLeaveMinutes; }
         public int getTotalOvertimeMinutes() { return totalOvertimeMinutes; }

@@ -65,7 +65,7 @@ public class LeaveRequest {
     @JoinColumn(name = "approved_by_employee_id", insertable = false, updatable = false)
     private Employee approvedBy;
     
-    // Enums - 設計書通りの日本語ステータス
+    // Enums 日本語ステータス
     public enum LeaveRequestStatus {
         未処理("未処理"), 承認("承認"), 却下("却下");
         
@@ -74,7 +74,7 @@ public class LeaveRequest {
         public String getValue() { return value; }
     }
     
-    // Constructors
+ 
     public LeaveRequest() {}
     
     public LeaveRequest(Long employeeId, LocalDate leaveRequestDate, String leaveRequestReason) {
@@ -83,7 +83,7 @@ public class LeaveRequest {
         this.leaveRequestReason = leaveRequestReason;
     }
     
-    // Getters and Setters
+
     public Long getLeaveRequestId() { return leaveRequestId; }
     public void setLeaveRequestId(Long leaveRequestId) { this.leaveRequestId = leaveRequestId; }
     

@@ -75,7 +75,7 @@ public class AttendanceRecord {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
     
-    // Foreign key relationship
+ 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", insertable = false, updatable = false)
     private Employee employee;
@@ -97,7 +97,7 @@ public class AttendanceRecord {
         public String getValue() { return value; }
     }
     
-    // Constructors
+
     public AttendanceRecord() {}
     
     public AttendanceRecord(Long employeeId, LocalDate attendanceDate) {
@@ -105,7 +105,6 @@ public class AttendanceRecord {
         this.attendanceDate = attendanceDate;
     }
     
-    // Getters and Setters
     public Long getAttendanceId() { return attendanceId; }
     public void setAttendanceId(Long attendanceId) { this.attendanceId = attendanceId; }
     
@@ -159,7 +158,7 @@ public class AttendanceRecord {
     public boolean canModify() { return !isFixed(); }
     
     /**
-     * 実働時間計算（分単位）- 設計書通りの仕様
+     * 実働時間計算（分単位）
      * 昼休憩（12:00-13:00）は自動控除
      */
     public Integer getTotalWorkingMinutes() {

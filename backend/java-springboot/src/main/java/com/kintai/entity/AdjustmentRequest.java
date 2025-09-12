@@ -89,7 +89,7 @@ public class AdjustmentRequest {
         public String getValue() { return value; }
     }
     
-    // Constructors
+
     public AdjustmentRequest() {}
     
     public AdjustmentRequest(Long employeeId, LocalDate adjustmentTargetDate, String adjustmentReason) {
@@ -98,7 +98,7 @@ public class AdjustmentRequest {
         this.adjustmentReason = adjustmentReason;
     }
     
-    // Getters and Setters
+  
     public Long getAdjustmentRequestId() { return adjustmentRequestId; }
     public void setAdjustmentRequestId(Long adjustmentRequestId) { this.adjustmentRequestId = adjustmentRequestId; }
     

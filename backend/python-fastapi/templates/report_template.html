@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム 月次レポート</title>
+    <style>
+        /* PDF生成用スタイル（出力項目） */
+        body {
+            font-family: 'Hiragino Sans GB', 'MS Gothic', sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            margin: 0;
+            color: #333;
+        }
+
+        .info-section {
+            margin-bottom: 25px;
+        }
+
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .info-table th {
+            background-color: #f0f0f0;
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+            width: 25%;
+            font-weight: bold;
+        }
+
+        .info-table td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin: 20px 0 10px 0;
+            color: #333;
+            border-left: 4px solid #0066cc;
+            padding-left: 8px;
+        }
+
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 9pt;
+        }
+
+        .attendance-table th {
+            background-color: #333;
+            color: white;
+            border: 1px solid #333;
+            padding: 6px 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .attendance-table td {
+            border: 1px solid #333;
+            padding: 4px;
+            text-align: center;
+            background-color: #fafafa;
+        }
+
+        .attendance-table tr:nth-child(even) td {
+            background-color: #f0f0f0;
+        }
+
+        .summary-section {
+            margin-top: 25px;
+        }
+
+        .summary-table {
+            width: 60%;
+            border-collapse: collapse;
+        }
+
+        .summary-table th {
+            background-color: #f0f0f0;
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+            width: 40%;
+        }
+
+        .summary-table td {
+            border: 1px solid #333;
+            padding: 8px;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+        .status-fixed {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            color: #ff6600;
+        }
+
+        .status-rejected {
+            color: #cc0000;
+        }
+
+        .time-overtime {
+            color: #ff6600;
+            font-weight: bold;
+        }
+
+        .time-night {
+            color: #6600cc;
+            font-weight: bold;
+        }
+
+        .time-late {
+            color: #cc0000;
+        }
+
+        @page {
+            margin: 2cm;
+            @bottom-center {
+                content: "- " counter(page) " -";
+                font-size: 8pt;
+                color: #666;
+            }
+        }
+
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー部 -->
+    <div class="header">
+        <h1>勤怠管理システム 月次レポート</h1>
+    </div>
+
+    <!-- 基本情報部（設計書通りの項目） -->
+    <div class="info-section">
+        <table class="info-table">
+            <tr>
+                <th>対象年月</th>
+                <td>{{ year_month }}</td>
+                <th>社員名</th>
+                <td>{{ employee.employee_name }}</td>
+            </tr>
+            <tr>
+                <th>社員コード</th>
+                <td>{{ employee.employee_code }}</td>
+                <th>出力日時</th>
+                <td>{{ generated_at }}</td>
+            </tr>
+            <tr>
+                <th>対象期間</th>
+                <td colspan="3">{{ period.from }} ～ {{ period.to }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- 日次明細部（出力項目） -->
+    <div class="section-title">日次勤怠明細</div>
+    <table class="attendance-table">
+        <thead>
+            <tr>
+                <th>日付</th>
+                <th>出勤時刻</th>
+                <th>退勤時刻</th>
+                <th>遅刻</th>
+                <th>早退</th>
+                <th>残業</th>
+                <th>深夜</th>
+                <th>ステータス</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in attendance_list %}
+            <tr>
+                <td>{{ record.attendance_date }}</td>
+                <td>{{ record.clock_in_time or '-' }}</td>
+                <td>{{ record.clock_out_time or '-' }}</td>
+                <td class="{% if record.late_minutes > 0 %}time-late{% endif %}">
+                    {{ format_minutes_to_hhmm(record.late_minutes) }}
+                </td>
+                <td>{{ format_minutes_to_hhmm(record.early_leave_minutes) }}</td>
+                <td class="{% if record.overtime_minutes > 0 %}time-overtime{% endif %}">
+                    {{ format_minutes_to_hhmm(record.overtime_minutes) }}
+                </td>
+                <td class="{% if record.night_shift_minutes > 0 %}time-night{% endif %}">
+                    {{ format_minutes_to_hhmm(record.night_shift_minutes) }}
+                </td>
+                <td class="{% if record.attendance_fixed_flag %}status-fixed{% elif record.submission_status == '却下' %}status-rejected{% else %}status-pending{% endif %}">
+                    {% if record.attendance_fixed_flag %}
+                        確定
+                    {% else %}
+                        {{ record.submission_status }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- 集計情報部（集計項目） -->
+    <div class="section-title">月次集計</div>
+    <div class="summary-section">
+        <table class="summary-table">
+            <tr>
+                <th>実働合計</th>
+                <td>{{ format_minutes_to_hhmm(summary.total_working_minutes) }}</td>
+            </tr>
+            <tr>
+                <th>残業合計</th>
+                <td class="time-overtime">{{ format_minutes_to_hhmm(summary.total_overtime_minutes) }}</td>
+            </tr>
+            <tr>
+                <th>深夜合計</th>
+                <td class="time-night">{{ format_minutes_to_hhmm(summary.total_night_shift_minutes) }}</td>
+            </tr>
+            <tr>
+                <th>遅刻回数/時間</th>
+                <td class="time-late">{{ count_late_days(attendance_list) }}回 / {{ format_minutes_to_hhmm(summary.total_late_minutes) }}</td>
+            </tr>
+            <tr>
+                <th>早退回数/時間</th>
+                <td>{{ count_early_leave_days(attendance_list) }}回 / {{ format_minutes_to_hhmm(summary.total_early_leave_minutes) }}</td>
+            </tr>
+            <tr>
+                <th>有給取得日数</th>
+                <td>{{ summary.paid_leave_days }}日</td>
+            </tr>
+            <tr>
+                <th>欠勤日数</th>
+                <td>{{ summary.absent_days }}日</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- フッター部 -->
+    <div class="footer">
+        <p>本レポートは勤怠管理システムにより自動生成されました。</p>
+        <p>※ 遅刻分・早退分・残業分・深夜分は分単位で保存され、表示時にhh:mm形式に変換されています。</p>
+        <p>※ 残業時間と深夜時間は重複してカウントされます（22:00以降の残業は両方にカウント）。</p>
+    </div>
+</body>
+</html>

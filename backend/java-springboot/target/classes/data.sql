@@ -1,7 +1,6 @@
--- 初期データ投入用SQLファイル（設計書通りの実装）
+-- 初期データ投入用SQLファイル
 -- パスワードハッシュは BCrypt で生成済み
-
--- 管理者アカウント（設計書通りの初期データ）
+-- 管理者アカウント（初期データ）
 INSERT INTO employees (
     employee_code, employee_name, email, employee_password_hash, employee_role,
     employment_status, hired_at, paid_leave_remaining_days, created_at, updated_at
@@ -18,7 +17,7 @@ INSERT INTO employees (
     CURRENT_TIMESTAMP
 ) ON DUPLICATE KEY UPDATE employee_name = VALUES(employee_name);
 
--- テストユーザーアカウント（設計書通りの初期データ）
+-- テストユーザーアカウント（初期データ）
 INSERT INTO employees (
     employee_code, employee_name, email, employee_password_hash, employee_role,
     employment_status, hired_at, paid_leave_remaining_days, created_at, updated_at
@@ -61,12 +60,12 @@ INSERT INTO employees (
 )
 ON DUPLICATE KEY UPDATE employee_name = VALUES(employee_name);
 
--- 退職者の退職日設定（設計書通り）
+-- 退職者の退職日設定
 UPDATE employees 
 SET retired_at = '2025-07-31' 
 WHERE employee_code = 'E003' AND employment_status = 'RETIRED';
 
--- テスト用勤怠データ（2025年8月分）- 設計書通りの時間計算
+-- テスト用勤怠データ（2025年8月分）- 時間計算
 INSERT INTO attendance_records (
     employee_id, attendance_date, clock_in_time, clock_out_time, 
     late_minutes, early_leave_minutes, overtime_minutes, night_shift_minutes,
@@ -98,7 +97,7 @@ INSERT INTO attendance_records (
 
 ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at);
 
--- テスト用有給申請データ（設計書通りのステータス）
+-- テスト用有給申請データ（ステータス）
 INSERT INTO leave_requests (
     employee_id, leave_request_date, leave_request_reason, leave_request_status, 
     created_at, updated_at
@@ -107,7 +106,7 @@ INSERT INTO leave_requests (
 (2, '2025-09-20', '家族の用事', '未処理', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at);
 
--- テスト用打刻修正申請データ（設計書通りのステータス）
+-- テスト用打刻修正申請データ（ステータス）
 INSERT INTO adjustment_requests (
     employee_id, adjustment_target_date, original_clock_in_time, original_clock_out_time,
     adjustment_requested_time_in, adjustment_requested_time_out, adjustment_reason,
@@ -119,7 +118,7 @@ INSERT INTO adjustment_requests (
  '2025-08-02 09:00:00', '2025-08-02 18:00:00', 'システム不具合のため', '未処理', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at);
 
--- インデックス作成（設計書通りのパフォーマンス向上）
+-- インデックス作成（パフォーマンス向上）
 -- CREATE INDEX IF NOT EXISTS idx_employee_code ON employees(employee_code);
 -- CREATE INDEX IF NOT EXISTS idx_employee_email ON employees(email);
 -- CREATE INDEX IF NOT EXISTS idx_employee_status ON employees(employment_status);
