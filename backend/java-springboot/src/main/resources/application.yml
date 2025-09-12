@@ -3,10 +3,15 @@ spring:
     name: kintai-system
 
   datasource:
-    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8}
-    username: ${DATABASE_USERNAME:kintai_user}
-    password: ${DATABASE_PASSWORD:kintai_password}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Tokyo&characterEncoding=utf8}
+    username: ${SPRING_DATASOURCE_USERNAME:kintai_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:kintai_pass}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
     
   jpa:
     hibernate:
