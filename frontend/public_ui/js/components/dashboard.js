@@ -1,5 +1,5 @@
 // 社員ダッシュボードコンポーネント（設計書画面ID E001完全準拠）
-class Dashboard {
+class DashboardComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -8,7 +8,7 @@ class Dashboard {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム</span>
@@ -56,9 +56,6 @@ class Dashboard {
                 </div>
             </div>
         `;
-        
-        this.loadTodayStatus();
-        this.attachEventListeners();
     }
     
     async loadTodayStatus() {
@@ -185,4 +182,4 @@ class Dashboard {
 }
 
 // グローバルに公開
-window.Dashboard = Dashboard;
+window.DashboardComponent = DashboardComponent;

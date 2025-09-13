@@ -18,10 +18,11 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     \
-    # 静的ファイルキャッシュ設定 \
+    # 静的ファイルキャッシュ設定（開発用：キャッシュ無効） \
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ { \
-        expires 1y; \
-        add_header Cache-Control "public, immutable"; \
+        expires -1; \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

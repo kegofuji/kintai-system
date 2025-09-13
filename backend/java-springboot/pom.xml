@@ -99,6 +99,52 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        
+        <!-- Password Validation -->
+        <dependency>
+            <groupId>org.passay</groupId>
+            <artifactId>passay</artifactId>
+            <version>1.6.4</version>
+        </dependency>
+        
+        <!-- Input Sanitization -->
+        <dependency>
+            <groupId>org.owasp.encoder</groupId>
+            <artifactId>encoder</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        
+        <!-- Apache Commons Lang for StringEscapeUtils -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+        
+        <!-- Apache Commons Text for StringEscapeUtils -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-text</artifactId>
+            <version>1.11.0</version>
+        </dependency>
+        
+        <!-- Spring Boot Redis for Rate Limiting -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+        
+        <!-- HikariCP for Database Connection Pool -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+        
+        <!-- Spring Boot Data JPA Auditing -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-jpa</artifactId>
+        </dependency>
     </dependencies>
     
     <build>

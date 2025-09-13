@@ -186,70 +186,79 @@ class App {
     // 画面表示メソッド（各コンポーネント呼び出し）
     showLogin() {
         const container = document.getElementById('app');
-        const loginComponent = new LoginComponent();
+        const loginComponent = new LoginComponent(container, this);
         container.innerHTML = loginComponent.render();
-        loginComponent.setupEventListeners();
+        loginComponent.attachEventListeners();
     }
     
     showEmployeeDashboard() {
         const container = document.getElementById('app');
-        const dashboard = new DashboardComponent();
+        const dashboard = new DashboardComponent(container, this);
         container.innerHTML = dashboard.render();
-        dashboard.setupEventListeners();
+        dashboard.attachEventListeners();
     }
     
     showAttendanceHistory() {
         const container = document.getElementById('app');
-        const attendance = new AttendanceComponent();
+        const attendance = new AttendanceComponent(container, this);
         container.innerHTML = attendance.render();
+        attendance.attachEventListeners();
     }
     
     showLeaveRequest() {
         const container = document.getElementById('app');
-        const leaveRequest = new LeaveRequestComponent();
+        const leaveRequest = new LeaveRequestComponent(container, this);
         container.innerHTML = leaveRequest.render();
+        leaveRequest.attachEventListeners();
     }
     
     showAdjustmentRequest() {
         const container = document.getElementById('app');
-        const adjustmentRequest = new AdjustmentRequestComponent();
+        const adjustmentRequest = new AdjustmentRequestComponent(container, this);
         container.innerHTML = adjustmentRequest.render();
+        adjustmentRequest.attachEventListeners();
     }
     
     showAdminDashboard() {
         const container = document.getElementById('app');
-        const adminDashboard = new AdminDashboardComponent();
+        const adminDashboard = new AdminDashboardComponent(container, this);
         container.innerHTML = adminDashboard.render();
+        adminDashboard.attachEventListeners();
     }
     
     showEmployeeManagement() {
         const container = document.getElementById('app');
-        const employeeManagement = new EmployeeManagementComponent();
+        const employeeManagement = new EmployeeManagementComponent(container, this);
         container.innerHTML = employeeManagement.render();
+        employeeManagement.attachEventListeners();
     }
     
     showAttendanceManagement() {
         const container = document.getElementById('app');
-        const attendanceManagement = new AttendanceComponent(); // 管理者用勤怠管理
+        const attendanceManagement = new AttendanceManagementComponent(container, this); // 管理者用勤怠管理
         container.innerHTML = attendanceManagement.render();
+        attendanceManagement.attachEventListeners();
     }
     
     showApprovalManagement() {
         const container = document.getElementById('app');
-        const approvalManagement = new ApprovalManagementComponent();
+        const approvalManagement = new ApprovalManagementComponent(container, this);
         container.innerHTML = approvalManagement.render();
+        approvalManagement.attachEventListeners();
     }
     
     showLeaveManagement() {
         const container = document.getElementById('app');
-        const leaveManagement = new LeaveRequestComponent(); // 管理者用有給管理
+        const leaveManagement = new LeaveManagementComponent(container, this); // 管理者用有給管理
         container.innerHTML = leaveManagement.render();
+        leaveManagement.attachEventListeners();
     }
     
     showReportGeneration() {
         const container = document.getElementById('app');
-        const reportGeneration = new AdminDashboardComponent(); // レポート生成画面
+        const reportGeneration = new ReportGenerationComponent(container, this); // レポート生成画面
         container.innerHTML = reportGeneration.render();
+        reportGeneration.attachEventListeners();
     }
     
     /**

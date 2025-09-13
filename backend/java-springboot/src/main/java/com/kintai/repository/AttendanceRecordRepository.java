@@ -2,6 +2,8 @@ package com.kintai.repository;
 
 import com.kintai.entity.AttendanceRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -49,7 +51,7 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
      * @param fixedFlag 確定フラグ
      * @return 勤怠記録一覧
      */
-    List<AttendanceRecord> findByEmployeeIdAndAttendanceDateBetweenAndAttendanceFixedFlag(Long employeeId, LocalDate start, LocalDate end, Integer fixedFlag);
+    List<AttendanceRecord> findByEmployeeIdAndAttendanceDateBetweenAndAttendanceFixedFlag(Long employeeId, LocalDate start, LocalDate end, Boolean fixedFlag);
 
     /**
      * 社員IDと年月と勤怠ステータスで勤怠記録一覧を検索
@@ -58,7 +60,8 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
      * @param status 勤怠ステータス
      * @return 勤怠記録一覧
      */
-    List<AttendanceRecord> findByEmployeeIdAndYearMonthAndAttendanceStatus(Long employeeId, String yearMonth, String status);
+    @Query("SELECT a FROM AttendanceRecord a WHERE a.employeeId = :employeeId AND FUNCTION('FORMATDATETIME', a.attendanceDate, 'yyyy-MM') = :yearMonth AND a.attendanceStatus = :status")
+    List<AttendanceRecord> findByEmployeeIdAndYearMonthAndAttendanceStatus(@Param("employeeId") Long employeeId, @Param("yearMonth") String yearMonth, @Param("status") String status);
 
     /**
      * 月末申請ステータスと社員IDで勤怠記録一覧を検索

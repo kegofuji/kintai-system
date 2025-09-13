@@ -1,5 +1,5 @@
 // レポート出力画面コンポーネント（設計書画面ID A006完全準拠）
-class ReportGeneration {
+class ReportGenerationComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -8,7 +8,7 @@ class ReportGeneration {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム - 管理者</span>
@@ -199,7 +199,6 @@ class ReportGeneration {
             </div>
         `;
         
-        this.attachEventListeners();
         this.loadEmployees();
         this.loadReportHistory();
     }
@@ -430,4 +429,4 @@ class ReportGeneration {
 }
 
 // グローバルに公開
-window.ReportGeneration = ReportGeneration;
+window.ReportGenerationComponent = ReportGenerationComponent;

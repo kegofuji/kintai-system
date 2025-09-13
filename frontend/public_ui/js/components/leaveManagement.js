@@ -1,5 +1,5 @@
 // 有給管理画面コンポーネント（設計書画面ID A005完全準拠）
-class LeaveManagement {
+class LeaveManagementComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -8,7 +8,7 @@ class LeaveManagement {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム - 管理者</span>
@@ -95,7 +95,6 @@ class LeaveManagement {
             </div>
         `;
         
-        this.attachEventListeners();
         this.loadEmployees();
     }
     
@@ -245,4 +244,4 @@ class LeaveManagement {
 }
 
 // グローバルに公開
-window.LeaveManagement = LeaveManagement;
+window.LeaveManagementComponent = LeaveManagementComponent;

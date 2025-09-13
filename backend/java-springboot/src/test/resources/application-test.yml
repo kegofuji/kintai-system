@@ -1,0 +1,55 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: 
+  
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        hbm2ddl:
+          auto: create-drop
+    
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:test-data.sql
+      continue-on-error: true
+      
+  h2:
+    console:
+      enabled: true
+      
+  security:
+    user:
+      name: test
+      password: test
+      roles: USER
+
+# JWT設定（テスト用）
+jwt:
+  secret: test-jwt-secret-key-for-testing-purposes-only
+  expiration: 3600
+
+# ログ設定
+logging:
+  level:
+    com.kintai: WARN
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.security: WARN
+
+# テスト用プロファイル設定
+test:
+  data:
+    cleanup: true
+    reset-sequences: true
+

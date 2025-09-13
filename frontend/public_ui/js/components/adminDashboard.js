@@ -1,12 +1,12 @@
 // 管理者ダッシュボードコンポーネント（設計書画面ID A001完全準拠）
-class AdminDashboard {
+class AdminDashboardComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム - 管理者</span>
@@ -104,4 +104,4 @@ class AdminDashboard {
 }
 
 // グローバルに公開
-window.AdminDashboard = AdminDashboard;
+window.AdminDashboardComponent = AdminDashboardComponent;

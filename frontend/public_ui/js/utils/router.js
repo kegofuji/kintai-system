@@ -53,7 +53,17 @@ class Router {
             }
         } else {
             // 404の場合はログイン画面に遷移
-            this.navigate('/login');
+            window.location.hash = '#/login';
+            this.currentRoute = '/login';
+            const loginHandler = this.routes.get('/login');
+            if (loginHandler) {
+                try {
+                    loginHandler();
+                } catch (error) {
+                    console.error('Login route handler error:', error);
+                    this.showError('ログイン画面の表示に失敗しました');
+                }
+            }
         }
     }
 

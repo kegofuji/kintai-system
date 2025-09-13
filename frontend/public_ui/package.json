@@ -1,0 +1,40 @@
+{
+  "name": "kintai-frontend",
+  "version": "1.0.0",
+  "description": "勤怠管理システム フロントエンド",
+  "main": "index.html",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "test:update": "jest --updateSnapshot",
+    "serve": "python -m http.server 8080",
+    "build": "echo 'No build process required for vanilla JS'",
+    "lint": "eslint js/**/*.js",
+    "lint:fix": "eslint js/**/*.js --fix"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "eslint": "^8.57.0"
+  },
+  "keywords": [
+    "kintai",
+    "attendance",
+    "management",
+    "frontend",
+    "javascript"
+  ],
+  "author": "Kintai System Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/kintai-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/kintai-system/issues"
+  },
+  "homepage": "https://github.com/your-org/kintai-system#readme"
+}

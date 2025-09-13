@@ -1,5 +1,5 @@
 // ログイン画面コンポーネント（設計書画面ID L001完全準拠）
-class Login {
+class LoginComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -7,7 +7,7 @@ class Login {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <div class="login-container">
                 <div class="login-card">
                     <h1 class="login-title">勤怠管理システム</h1>
@@ -31,8 +31,6 @@ class Login {
                 </div>
             </div>
         `;
-        
-        this.attachEventListeners();
     }
     
     attachEventListeners() {
@@ -126,4 +124,4 @@ class Login {
 }
 
 // グローバルに公開
-window.Login = Login;
+window.LoginComponent = LoginComponent;

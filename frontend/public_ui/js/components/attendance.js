@@ -1,5 +1,5 @@
 // 勤怠履歴画面コンポーネント（設計書画面ID E002完全準拠）
-class Attendance {
+class AttendanceComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -8,7 +8,7 @@ class Attendance {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム</span>
@@ -103,9 +103,6 @@ class Attendance {
                 </div>
             </div>
         `;
-        
-        this.attachEventListeners();
-        this.loadAttendanceData();
     }
     
     attachEventListeners() {
@@ -364,4 +361,4 @@ class Attendance {
 }
 
 // グローバルに公開
-window.Attendance = Attendance;
+window.AttendanceComponent = AttendanceComponent;

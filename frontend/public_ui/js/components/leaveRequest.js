@@ -1,5 +1,5 @@
 // 有給申請画面コンポーネント（設計書画面ID E003完全準拠）
-class LeaveRequest {
+class LeaveRequestComponent {
     constructor(container, app) {
         this.container = container;
         this.app = app;
@@ -8,7 +8,7 @@ class LeaveRequest {
     }
     
     render() {
-        this.container.innerHTML = `
+        return `
             <nav class="navbar navbar-expand-lg navbar-custom">
                 <div class="container-fluid">
                     <span class="navbar-brand">勤怠管理システム</span>
@@ -106,7 +106,6 @@ class LeaveRequest {
         
         this.loadRemainingDays();
         this.loadRequestHistory();
-        this.attachEventListeners();
     }
     
     attachEventListeners() {
@@ -276,4 +275,4 @@ class LeaveRequest {
 }
 
 // グローバルに公開
-window.LeaveRequest = LeaveRequest;
+window.LeaveRequestComponent = LeaveRequestComponent;

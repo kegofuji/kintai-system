@@ -108,7 +108,7 @@ public class AttendanceService {
         }
         
         if (record.getClockOutTime() != null) {
-            throw new BusinessException("ALREADY_CLOCKED_IN", "既に退勤打刻済みです");
+            throw new BusinessException("ALREADY_CLOCKED_OUT", "既に退勤打刻済みです");
         }
         
         // 退勤打刻処理
