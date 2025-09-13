@@ -1,220 +1,185 @@
+# ===========================================
+# 勤怠管理システム メイン設定
+# ===========================================
+
 spring:
   application:
     name: kintai-system
-
+  
+  profiles:
+    active: dev
+  
+  # データベース設定
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kintai_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Tokyo&characterEncoding=utf8}
-    username: ${SPRING_DATASOURCE_USERNAME:kintai_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:kintai_pass}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      connection-timeout: 30000
-      maximum-pool-size: 10
-      minimum-idle: 5
-      idle-timeout: 300000
-    
+    url: jdbc:mysql://localhost:3306/kintai_system?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8mb4&useUnicode=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+  
+  # JPA/Hibernate設定
   jpa:
     hibernate:
       ddl-auto: update
-      naming:
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
-        show_sql: false
-        use_sql_comments: true
-        timezone: Asia/Tokyo
-    show-sql: false
-    
+        jdbc:
+          time_zone: Asia/Tokyo
+    open-in-view: false
+  
+  # セッション設定
   session:
-    store-type: none
-    timeout: 10m
-    
-  security:
-    user:
-      name: admin
-      password: admin123
-      roles: ADMIN
-      
+    timeout: 600s
+  
+  # CORS設定
   web:
-    resources:
-      static-locations: classpath:/static/
-      cache:
-        period: 3600
-        
-  jackson:
-    time-zone: Asia/Tokyo
-    date-format: yyyy-MM-dd HH:mm:ss
-    serialization:
-      write-dates-as-timestamps: false
-      
-  validation:
-    enabled: true
+    cors:
+      allowed-origins: 
+        - http://localhost:3000
+        - https://frontend-url
+      allowed-methods: 
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
 
+# サーバー設定
 server:
-  port: ${PORT:8080}
+  port: 8080
   servlet:
-    context-path: /
-    session:
-      timeout: 10m
-      cookie:
-        name: KINTAI_SESSION
-        secure: false
-        http-only: true
-        same-site: lax
-        max-age: 600
-        
+    context-path: /api
   error:
-    whitelabel:
-      enabled: false
-    include-stacktrace: never
     include-message: always
+    include-binding-errors: always
 
+# セキュリティ設定
+security:
+  jwt:
+    secret: ${JWT_SECRET:defaultSecretKeyForDevelopmentOnlyChangeInProduction}
+    expiration: 86400000 # 24時間（ミリ秒）
+
+# JWT設定
+jwt:
+  secret: ${JWT_SECRET:defaultSecretKeyForDevelopmentOnlyChangeInProduction}
+  expiration: 600 # 10分 = 600秒
+
+# ログ設定
+logging:
+  level:
+    com.kintai: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# ===========================================
+# 開発環境設定 (dev)
+# ===========================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+  
+  datasource:
+    url: jdbc:mysql://localhost:3306/kintai_system_dev?useSSL=false&serverTimezone=Asia/Tokyo&characterEncoding=utf8mb4&useUnicode=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+  
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+
+# 開発環境ログ設定
+logging:
+  level:
+    com.kintai: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  file:
+    name: logs/kintai-dev.log
+
+---
+# ===========================================
+# 本番環境設定 (prod)
+# ===========================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+  
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:kintai_system}?useSSL=true&serverTimezone=Asia/Tokyo&characterEncoding=utf8mb4&useUnicode=true
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+# 本番環境ログ設定
 logging:
   level:
     com.kintai: INFO
     org.springframework.security: WARN
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  file:
+    name: logs/kintai-prod.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 1GB
+
+---
+# ===========================================
+# Railway環境設定 (railway)
+# ===========================================
+spring:
+  config:
+    activate:
+      on-profile: railway
+  
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useSSL=true&serverTimezone=Asia/Tokyo&characterEncoding=utf8mb4&useUnicode=true
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+
+# Railway環境ログ設定
+logging:
+  level:
+    com.kintai: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/kintai-system.log
-    max-size: 10MB
-    max-history: 30
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: when_authorized
-      
-kintai:
-  # 勤怠管理設定
-  attendance:
-    standard-start-time: "09:00"
-    standard-end-time: "18:00" 
-    lunch-start-time: "12:00"
-    lunch-end-time: "13:00"
-    night-start-time: "22:00"
-    night-end-time: "05:00"
-    standard-working-hours: 8
-    
-  # セキュリティ設定
-  security:
-    session-timeout-minutes: 10
-    password-policy:
-      min-length: 8
-      max-length: 20
-      require-uppercase: true
-      require-lowercase: true
-      require-digit: true
-      require-symbol: true
-      
-  # FastAPI連携設定
-  fastapi:
-    base-url: ${FASTAPI_URL:http://localhost:8081}
-    pdf-endpoint: /reports/pdf
-    timeout: 30s
-    
-  # 初期データ設定
-  init:
-    create-admin: true
-    admin-code: ADMIN001
-    admin-password: AdminPass123!
-    paid-leave-initial-days: 10
-
----
-spring:
-  config:
-    activate:
-      on-profile: development
-      
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: KINTAI_USER
-    password: KINTAI_PASSWORD
-    
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    database-platform: org.hibernate.dialect.H2Dialect
-    show-sql: true
-    
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-      
-  sql:
-    init:
-      mode: never
-    
-logging:
-  level:
-    com.kintai: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
-    
+# Railway環境サーバー設定
 server:
-  error:
-    include-stacktrace: always
-
----
-spring:
-  config:
-    activate:
-      on-profile: production
-      
-  datasource:
-    url: ${DATABASE_URL}
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 20000
-      idle-timeout: 300000
-      max-lifetime: 1200000
-      
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    
-logging:
-  level:
-    root: WARN
-    com.kintai: INFO
-    
-server:
-  error:
-    include-stacktrace: never
-
----
-spring:
-  config:
-    activate:
-      on-profile: test
-      
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
-    
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    database-platform: org.hibernate.dialect.H2Dialect
-    
-  h2:
-    console:
-      enabled: true
-  sql:
-    init:
-      mode: never
+  port: ${PORT:8080}

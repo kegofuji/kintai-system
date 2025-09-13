@@ -1,23 +1,37 @@
 package com.kintai.util;
 
-import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
+/**
+ * バリデーションユーティリティ
+ * 設計書のパスワードポリシー完全準拠
+ */
+@Component
 public class ValidationUtil {
     
-    private static final Pattern EMPLOYEE_CODE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{3,10}$");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,20}$");
-    
     /**
-     * パスワード詳細バリデーション
+     * パスワード検証（設計書の詳細ルール完全準拠）
+     * - 8-20文字
+     * - 英字（大文字・小文字）、数字、記号を各1文字以上含む
+     * - 連続する同一文字3文字以上禁止
+     * - 社員IDと同一文字列禁止
+     * 
+     * @param password パスワード
+     * @param employeeCode 社員コード
+     * @return 有効な場合true
      */
-    public static boolean isValidPassword(String password, String employeeCode) {
+    public static boolean validatePassword(String password, String employeeCode) {
         if (password == null || password.length() < 8 || password.length() > 20) {
             return false;
         }
         
-        // 英字（大文字・小文字）、数字、記号を各1文字以上含む
-        if (!PASSWORD_PATTERN.matcher(password).matches()) {
+        // 英字（大文字・小文字）、数字、記号の各1文字以上チェック
+        boolean hasLowerCase = password.matches(".*[a-z].*");
+        boolean hasUpperCase = password.matches(".*[A-Z].*");
+        boolean hasDigit = password.matches(".*\\d.*");
+        boolean hasSpecialChar = password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\?].*");
+        
+        if (!hasLowerCase || !hasUpperCase || !hasDigit || !hasSpecialChar) {
             return false;
         }
         
@@ -30,74 +44,98 @@ public class ValidationUtil {
         }
         
         // 社員IDと同一文字列禁止
-        if (employeeCode != null && password.contains(employeeCode)) {
+        if (password.equalsIgnoreCase(employeeCode)) {
             return false;
-        }
-        
-        // よくあるパスワード禁止
-        String[] commonPasswords = {
-            "password", "123456", "123456789", "qwerty", "abc123",
-            "password123", "admin", "login", "welcome"
-        };
-        String lowerPassword = password.toLowerCase();
-        for (String common : commonPasswords) {
-            if (lowerPassword.contains(common)) {
-                return false;
-            }
         }
         
         return true;
     }
     
     /**
-     * 社員コードバリデーション
+     * 社員コード検証
+     * @param code 社員コード
+     * @return 有効な場合true
      */
-    public static boolean isValidEmployeeCode(String employeeCode) {
-        return employeeCode != null && EMPLOYEE_CODE_PATTERN.matcher(employeeCode).matches();
+    public static boolean isValidEmployeeCode(String code) {
+        return code != null && code.matches("^[a-zA-Z0-9]{3,10}$");
     }
     
     /**
-     * メールアドレスバリデーション
+     * メールアドレス検証
+     * @param email メールアドレス
+     * @return 有効な場合true
      */
     public static boolean isValidEmail(String email) {
-        return email != null && EMAIL_PATTERN.matcher(email).matches();
+        return email != null && email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     }
     
     /**
-     * パスワード要件エラーメッセージ生成
+     * 年月形式検証（YYYY-MM）
+     * @param yearMonth 年月文字列
+     * @return 有効な場合true
      */
-    public static String getPasswordValidationMessage(String password, String employeeCode) {
-        if (password == null || password.length() < 8 || password.length() > 20) {
-            return "パスワードは8-20文字で入力してください";
+    public static boolean isValidYearMonth(String yearMonth) {
+        return yearMonth != null && yearMonth.matches("^\\d{4}-\\d{2}$");
+    }
+    
+    /**
+     * 日付形式検証（YYYY-MM-DD）
+     * @param date 日付文字列
+     * @return 有効な場合true
+     */
+    public static boolean isValidDateFormat(String date) {
+        return date != null && date.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+    
+    /**
+     * 時刻形式検証（HH:MM:SS）
+     * @param time 時刻文字列
+     * @return 有効な場合true
+     */
+    public static boolean isValidTimeFormat(String time) {
+        return time != null && time.matches("^\\d{2}:\\d{2}:\\d{2}$");
+    }
+    
+    /**
+     * 文字列がnullまたは空でないかチェック
+     * @param value チェック対象文字列
+     * @return nullまたは空でない場合true
+     */
+    public static boolean isNotBlank(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+    
+    /**
+     * 文字列がnullまたは空かチェック
+     * @param value チェック対象文字列
+     * @return nullまたは空の場合true
+     */
+    public static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+    
+    /**
+     * 数値範囲チェック
+     * @param value チェック対象数値
+     * @param min 最小値
+     * @param max 最大値
+     * @return 範囲内の場合true
+     */
+    public static boolean isInRange(int value, int min, int max) {
+        return value >= min && value <= max;
+    }
+    
+    /**
+     * 文字列長チェック
+     * @param value チェック対象文字列
+     * @param minLength 最小長
+     * @param maxLength 最大長
+     * @return 範囲内の場合true
+     */
+    public static boolean isLengthInRange(String value, int minLength, int maxLength) {
+        if (value == null) {
+            return false;
         }
-        
-        if (!password.matches(".*[a-z].*")) {
-            return "パスワードには小文字を1文字以上含めてください";
-        }
-        
-        if (!password.matches(".*[A-Z].*")) {
-            return "パスワードには大文字を1文字以上含めてください";
-        }
-        
-        if (!password.matches(".*\\d.*")) {
-            return "パスワードには数字を1文字以上含めてください";
-        }
-        
-        if (!password.matches(".*[@$!%*?&].*")) {
-            return "パスワードには記号(@$!%*?&)を1文字以上含めてください";
-        }
-        
-        for (int i = 0; i < password.length() - 2; i++) {
-            if (password.charAt(i) == password.charAt(i + 1) && 
-                password.charAt(i + 1) == password.charAt(i + 2)) {
-                return "パスワードに同一文字を3文字以上連続で使用することはできません";
-            }
-        }
-        
-        if (employeeCode != null && password.contains(employeeCode)) {
-            return "パスワードに社員IDを含めることはできません";
-        }
-        
-        return null;
+        return value.length() >= minLength && value.length() <= maxLength;
     }
 }

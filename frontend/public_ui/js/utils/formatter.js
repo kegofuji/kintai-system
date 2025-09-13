@@ -1,13 +1,10 @@
-/**
- * データフォーマッター（表示形式）
- */
-
+// フォーマッターユーティリティ（設計書の時間表示要件準拠）
 class Formatter {
     /**
-     * 分を時間:分の文字列に変換（hh:mm表示）
+     * 分をHH:MM形式に変換（設計書：分→時分変換）
      */
-    static formatMinutesToHHMM(minutes) {
-        if (typeof minutes !== 'number' || minutes === 0 || minutes === null) {
+    static minutesToHHMM(minutes) {
+        if (minutes === 0 || minutes === null || minutes === undefined) {
             return '00:00';
         }
         
@@ -19,156 +16,60 @@ class Formatter {
     }
     
     /**
-     * ステータス表示名取得（日本語表示）
+     * 数値をカンマ区切りに変換
      */
-    static formatStatus(status, type) {
-        const statusMaps = {
-            attendance: {
-                'normal': '通常出勤',
-                'paid_leave': '有給休暇',
-                'absent': '欠勤'
-            },
-            submission: {
-                '未提出': '未提出',
-                '申請済': '申請済',
-                '承認': '承認済',
-                '却下': '却下'
-            },
-            request: {
-                '未処理': '未処理',
-                '承認': '承認済',
-                '却下': '却下'
-            },
-            employment: {
-                'active': '在籍',
-                'retired': '退職'
-            },
-            role: {
-                'employee': '一般社員',
-                'admin': '管理者'
-            }
+    static numberWithCommas(num) {
+        if (num === null || num === undefined) return '0';
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    
+    /**
+     * ステータス日本語変換
+     */
+    static formatAttendanceStatus(status) {
+        const statusMap = {
+            'normal': '出勤',
+            'paid_leave': '有給',
+            'absent': '欠勤'
         };
-        
-        return statusMaps[type]?.[status] || status;
+        return statusMap[status] || status;
     }
     
     /**
-     * ステータス用CSSクラス生成
+     * 申請状況日本語変換
      */
-    static getStatusClass(status, type) {
-        const classMaps = {
-            submission: {
-                '未提出': 'status-pending',
-                '申請済': 'status-submitted',
-                '承認': 'status-approved',
-                '却下': 'status-rejected'
-            },
-            request: {
-                '未処理': 'status-pending',
-                '承認': 'status-approved',
-                '却下': 'status-rejected'
-            },
-            employment: {
-                'active': 'status-active',
-                'retired': 'status-retired'
-            }
+    static formatSubmissionStatus(status) {
+        const statusMap = {
+            '未提出': '未提出',
+            '申請済': '申請済',
+            '承認': '確定済',
+            '却下': '却下'
         };
-        
-        return classMaps[type]?.[status] || 'status-default';
+        return statusMap[status] || status;
     }
     
     /**
-     * 数値のカンマ区切り
+     * 申請種別日本語変換
      */
-    static formatNumber(num) {
-        if (typeof num !== 'number') return '0';
-        return num.toLocaleString('ja-JP');
-    }
-    
-    /**
-     * 勤怠集計データフォーマット
-     */
-    static formatAttendanceSummary(summary) {
-        if (!summary) return {};
-        
-        return {
-            totalWorking: this.formatMinutesToHHMM(summary.totalWorkingMinutes),
-            totalOvertime: this.formatMinutesToHHMM(summary.totalOvertimeMinutes),
-            totalNightShift: this.formatMinutesToHHMM(summary.totalNightShiftMinutes),
-            totalLate: this.formatMinutesToHHMM(summary.totalLateMinutes),
-            totalEarlyLeave: this.formatMinutesToHHMM(summary.totalEarlyLeaveMinutes),
-            paidLeaveDays: `${summary.paidLeaveDays}日`,
-            absentDays: `${summary.absentDays}日`
+    static formatRequestType(type) {
+        const typeMap = {
+            'leave': '有給申請',
+            'adjustment': '打刻修正',
+            'monthly': '月末申請'
         };
+        return typeMap[type] || type;
     }
     
     /**
-     * テーブル表示用勤怠データフォーマット
+     * 申請状態日本語変換
      */
-    static formatAttendanceRecord(record) {
-        if (!record) return {};
-        
-        return {
-            date: DateUtil.formatDate(record.attendanceDate),
-            clockIn: record.clockInTime ? DateUtil.formatTimeOnly(record.clockInTime) : '-',
-            clockOut: record.clockOutTime ? DateUtil.formatTimeOnly(record.clockOutTime) : '-',
-            late: this.formatMinutesToHHMM(record.lateMinutes),
-            earlyLeave: this.formatMinutesToHHMM(record.earlyLeaveMinutes),
-            overtime: this.formatMinutesToHHMM(record.overtimeMinutes),
-            nightShift: this.formatMinutesToHHMM(record.nightShiftMinutes),
-            status: record.attendanceFixedFlag ? '確定' : this.formatStatus(record.submissionStatus, 'submission'),
-            statusClass: record.attendanceFixedFlag ? 'status-fixed' : this.getStatusClass(record.submissionStatus, 'submission')
+    static formatRequestStatus(status) {
+        const statusMap = {
+            '未処理': '未処理',
+            '承認': '承認済',
+            '却下': '却下済'
         };
-    }
-    
-    /**
-     * 社員情報フォーマット
-     */
-    static formatEmployee(employee) {
-        if (!employee) return {};
-        
-        return {
-            id: employee.employeeId,
-            code: employee.employeeCode,
-            name: employee.employeeName,
-            email: employee.email,
-            role: this.formatStatus(employee.employeeRole, 'role'),
-            status: this.formatStatus(employee.employmentStatus, 'employment'),
-            statusClass: this.getStatusClass(employee.employmentStatus, 'employment'),
-            hiredAt: DateUtil.formatDate(employee.hiredAt),
-            retiredAt: employee.retiredAt ? DateUtil.formatDate(employee.retiredAt) : '-',
-            paidLeaveRemainingDays: `${employee.paidLeaveRemainingDays}日`
-        };
-    }
-    
-    /**
-     * エラーメッセージフォーマット
-     */
-    static formatErrorMessage(error) {
-        if (!error) return 'エラーが発生しました';
-        
-        // APIエラーレスポンスの場合
-        if (error.errorCode && CONFIG.ERROR_MESSAGES[error.errorCode]) {
-            return CONFIG.ERROR_MESSAGES[error.errorCode];
-        }
-        
-        // HTTPステータスコードによる判定
-        if (error.status) {
-            switch (error.status) {
-                case 401:
-                    return 'セッションがタイムアウトしました';
-                case 403:
-                    return 'アクセス権限がありません';
-                case 404:
-                    return '要求されたデータが見つかりません';
-                case 500:
-                    return 'システムエラーが発生しました';
-                default:
-                    return error.message || 'エラーが発生しました';
-            }
-        }
-        
-        return error.message || 'エラーが発生しました';
+        return statusMap[status] || status;
     }
     
     /**
@@ -185,108 +86,202 @@ class Formatter {
     }
     
     /**
-     * パーセンテージフォーマット
+     * エラーメッセージフォーマット（設計書エラーコード対応）
      */
-    static formatPercentage(value, total) {
-        if (!total || total === 0) return '0%';
+    static formatErrorMessage(errorCode, defaultMessage) {
+        const errorMessages = {
+            'AUTH_FAILED': '認証に失敗しました',
+            'SESSION_TIMEOUT': 'セッションがタイムアウトしました',
+            'ACCESS_DENIED': 'アクセス権限がありません',
+            'ALREADY_CLOCKED_IN': '既に出勤打刻済みです',
+            'NOT_CLOCKED_IN': '出勤打刻が必要です',
+            'INCOMPLETE_ATTENDANCE': '打刻漏れがあります',
+            'INSUFFICIENT_LEAVE_DAYS': '有給残日数が不足しています',
+            'DUPLICATE_REQUEST': '既に申請済みです',
+            'FIXED_ATTENDANCE': '確定済みのため変更できません',
+            'EMPLOYEE_NOT_FOUND': '社員が見つかりません',
+            'REQUEST_NOT_FOUND': '申請が見つかりません',
+            'VALIDATION_ERROR': '入力内容に誤りがあります',
+            'SYSTEM_ERROR': 'システムエラーが発生しました',
+            'NETWORK_ERROR': 'ネットワークエラーが発生しました'
+        };
         
-        const percentage = (value / total) * 100;
-        return `${Math.round(percentage)}%`;
+        return errorMessages[errorCode] || defaultMessage || 'エラーが発生しました';
     }
     
     /**
-     * 電話番号フォーマット
+     * 日時フォーマット（YYYY/MM/DD HH:MM）
      */
-    static formatPhoneNumber(phone) {
+    static datetime(date) {
+        if (!date) return '';
+        
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        
+        return `${year}/${month}/${day} ${hours}:${minutes}`;
+    }
+    
+    /**
+     * 日付フォーマット（YYYY/MM/DD）
+     */
+    static date(date) {
+        if (!date) return '';
+        
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        
+        return `${year}/${month}/${day}`;
+    }
+    
+    /**
+     * 時刻フォーマット（HH:MM）
+     */
+    static time(date) {
+        if (!date) return '';
+        
+        const d = new Date(date);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        
+        return `${hours}:${minutes}`;
+    }
+    
+    /**
+     * 通貨フォーマット（円）
+     */
+    static currency(amount) {
+        if (amount === null || amount === undefined) return '¥0';
+        return '¥' + this.numberWithCommas(amount);
+    }
+    
+    /**
+     * パーセンテージフォーマット
+     */
+    static percentage(value, decimals = 1) {
+        if (value === null || value === undefined) return '0%';
+        return (value * 100).toFixed(decimals) + '%';
+    }
+    
+    /**
+     * 勤務時間フォーマット（時間:分）
+     */
+    static workHours(minutes) {
+        if (minutes === null || minutes === undefined) return '0:00';
+        
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        
+        return `${hours}:${String(mins).padStart(2, '0')}`;
+    }
+    
+    /**
+     * 残業時間フォーマット（時間:分）
+     */
+    static overtimeHours(minutes) {
+        if (minutes === null || minutes === undefined || minutes === 0) return '0:00';
+        
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        
+        return `${hours}:${String(mins).padStart(2, '0')}`;
+    }
+    
+    /**
+     * 遅刻時間フォーマット（分）
+     */
+    static lateMinutes(minutes) {
+        if (minutes === null || minutes === undefined || minutes === 0) return '0分';
+        return `${minutes}分`;
+    }
+    
+    /**
+     * 早退時間フォーマット（分）
+     */
+    static earlyLeaveMinutes(minutes) {
+        if (minutes === null || minutes === undefined || minutes === 0) return '0分';
+        return `${minutes}分`;
+    }
+    
+    /**
+     * 有給日数フォーマット
+     */
+    static leaveDays(days) {
+        if (days === null || days === undefined) return '0日';
+        return `${days}日`;
+    }
+    
+    /**
+     * 社員コードフォーマット（大文字変換）
+     */
+    static employeeCode(code) {
+        if (!code) return '';
+        return code.toUpperCase();
+    }
+    
+    /**
+     * 氏名フォーマット（前後の空白除去）
+     */
+    static employeeName(name) {
+        if (!name) return '';
+        return name.trim();
+    }
+    
+    /**
+     * メールアドレスフォーマット（小文字変換）
+     */
+    static email(email) {
+        if (!email) return '';
+        return email.toLowerCase().trim();
+    }
+    
+    /**
+     * 電話番号フォーマット（ハイフン区切り）
+     */
+    static phoneNumber(phone) {
         if (!phone) return '';
         
-        const cleaned = phone.replace(/\D/g, '');
-        const match = cleaned.match(/^(\d{3})(\d{4})(\d{4})$/);
+        // 数字のみ抽出
+        const numbers = phone.replace(/\D/g, '');
         
-        if (match) {
-            return `${match[1]}-${match[2]}-${match[3]}`;
+        if (numbers.length === 11) {
+            // 携帯電話: 090-1234-5678
+            return numbers.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+        } else if (numbers.length === 10) {
+            // 固定電話: 03-1234-5678
+            return numbers.replace(/(\d{2,4})(\d{4})(\d{4})/, '$1-$2-$3');
         }
         
         return phone;
     }
     
     /**
-     * 郵便番号フォーマット
+     * 郵便番号フォーマット（ハイフン区切り）
      */
-    static formatPostalCode(postal) {
-        if (!postal) return '';
+    static postalCode(code) {
+        if (!code) return '';
         
-        const cleaned = postal.replace(/\D/g, '');
-        const match = cleaned.match(/^(\d{3})(\d{4})$/);
+        // 数字のみ抽出
+        const numbers = code.replace(/\D/g, '');
         
-        if (match) {
-            return `${match[1]}-${match[2]}`;
+        if (numbers.length === 7) {
+            return numbers.replace(/(\d{3})(\d{4})/, '$1-$2');
         }
         
-        return postal;
+        return code;
     }
     
     /**
-     * HTMLエスケープ
+     * 住所フォーマット（都道府県 + 市区町村 + その他）
      */
-    static escapeHtml(text) {
-        if (typeof text !== 'string') return text;
-        
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    /**
-     * 改行をBRタグに変換
-     */
-    static nl2br(text) {
-        if (typeof text !== 'string') return text;
-        
-        return this.escapeHtml(text).replace(/\n/g, '<br>');
-    }
-    
-    /**
-     * 文字列切り詰め
-     */
-    static truncate(text, length = 50, suffix = '...') {
-        if (typeof text !== 'string') return '';
-        
-        if (text.length <= length) return text;
-        
-        return text.substring(0, length - suffix.length) + suffix;
-    }
-    
-    /**
-     * マスク処理（個人情報保護）
-     */
-    static maskPersonalInfo(text, type = 'default') {
-        if (typeof text !== 'string') return text;
-        
-        switch (type) {
-            case 'email':
-                const [local, domain] = text.split('@');
-                if (domain) {
-                    const maskedLocal = local.length > 2 ? 
-                        local.substring(0, 2) + '*'.repeat(local.length - 2) : 
-                        local;
-                    return `${maskedLocal}@${domain}`;
-                }
-                break;
-                
-            case 'phone':
-                return text.replace(/(\d{3})\d{4}(\d{4})/, '$1-****-$2');
-                
-            case 'name':
-                return text.length > 1 ? 
-                    text[0] + '*'.repeat(text.length - 1) : 
-                    text;
-                
-            default:
-                return text.replace(/./g, '*');
-        }
-        
-        return text;
+    static address(prefecture, city, address) {
+        const parts = [prefecture, city, address].filter(part => part && part.trim());
+        return parts.join('');
     }
 }
 

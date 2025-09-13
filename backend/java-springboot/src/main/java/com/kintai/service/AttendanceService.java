@@ -1,404 +1,318 @@
 package com.kintai.service;
 
+import com.kintai.dto.AttendanceHistoryRequest;
+import com.kintai.dto.AttendanceHistoryResponse;
+import com.kintai.dto.AttendanceInfo;
+import com.kintai.dto.AttendanceSummary;
+import com.kintai.dto.ClockResponse;
+import com.kintai.dto.EmployeeInfo;
+import com.kintai.dto.PeriodInfo;
 import com.kintai.entity.AttendanceRecord;
 import com.kintai.entity.Employee;
+import com.kintai.exception.BusinessException;
 import com.kintai.repository.AttendanceRecordRepository;
 import com.kintai.repository.EmployeeRepository;
 import com.kintai.util.DateUtil;
 import com.kintai.util.TimeCalculator;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.kintai.util.TimeCalculator.AttendanceCalculationResult;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
+/**
+ * 勤怠管理サービス
+ * 設計書のビジネスロジック完全再現
+ */
 @Service
 @Transactional
+@RequiredArgsConstructor
+@Slf4j
 public class AttendanceService {
     
-    @Autowired
-    private AttendanceRecordRepository attendanceRecordRepository;
-    
-    @Autowired
-    private EmployeeRepository employeeRepository;
-    
+    private final AttendanceRecordRepository attendanceRecordRepository;
+    private final EmployeeRepository employeeRepository;
+    private final TimeCalculator timeCalculator;
     
     /**
      * 出勤打刻
      */
-    public ClockResult clockIn(Long employeeId) {
-        try {
-            LocalDateTime now = DateUtil.nowInJapan();
-            LocalDate today = now.toLocalDate();
-            
-            // 社員存在チェック
-            Optional<Employee> employeeOpt = employeeRepository.findById(employeeId);
-            if (employeeOpt.isEmpty()) {
-                return ClockResult.failure("EMPLOYEE_NOT_FOUND", "社員が見つかりません");
-            }
-            
-            Employee employee = employeeOpt.get();
-            
-            // 在籍状況チェック
-            if (!employee.isActive()) {
-                return ClockResult.failure("ACCESS_DENIED", "アクセス権限がありません");
-            }
-            
-            // 既存レコードチェック
-            Optional<AttendanceRecord> existingRecord = 
-                attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, today);
-            
-            if (existingRecord.isPresent()) {
-                AttendanceRecord record = existingRecord.get();
-                if (record.hasClockInTime()) {
-                    return ClockResult.failure("ALREADY_CLOCKED_IN", "既に出勤打刻済みです");
-                }
-                if (record.isFixed()) {
-                    return ClockResult.failure("FIXED_ATTENDANCE", "確定済のため変更できません");
-                }
-            }
-            
-            // レコード作成または更新
-            AttendanceRecord record = existingRecord.orElse(new AttendanceRecord(employeeId, today));
-            record.setClockInTime(now);
-            
-            // 遅刻計算
-            int lateMinutes = TimeCalculator.calculateLateMinutes(now);
-            record.setLateMinutes(lateMinutes);
-            
-            AttendanceRecord saved = attendanceRecordRepository.save(record);
-            
-            String message = lateMinutes > 0 
-                ? String.format("出勤打刻が完了しました（%d分遅刻）", lateMinutes)
-                : "出勤打刻が完了しました";
-            
-            return ClockResult.success(saved, message);
-            
-        } catch (Exception e) {
-            return ClockResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+    public ClockResponse clockIn(Long employeeId) {
+        LocalDate today = DateUtil.getCurrentDate();
+        LocalDateTime now = DateUtil.getCurrentDateTime();
+        
+        // 当日の既存打刻チェック
+        Optional<AttendanceRecord> existing = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDate(employeeId, today);
+        
+        if (existing.isPresent() && existing.get().getClockInTime() != null) {
+            throw new BusinessException("ALREADY_CLOCKED_IN", "既に出勤打刻済みです");
         }
+        
+        // 出勤打刻処理
+        AttendanceRecord record = existing.orElse(
+                AttendanceRecord.builder()
+                        .employeeId(employeeId)
+                        .attendanceDate(today)
+                        .attendanceStatus(AttendanceRecord.AttendanceStatus.NORMAL)
+                        .submissionStatus(AttendanceRecord.SubmissionStatus.NOT_SUBMITTED)
+                        .attendanceFixedFlag(false)
+                        .build()
+        );
+        
+        record.setClockInTime(now);
+        
+        // 遅刻時間計算
+        int lateMinutes = timeCalculator.calculateLateMinutes(now);
+        record.setLateMinutes(lateMinutes);
+        
+        AttendanceRecord saved = attendanceRecordRepository.save(record);
+        
+        String message = lateMinutes > 0 ? 
+                String.format("出勤打刻が完了しました（%d分遅刻）", lateMinutes) : 
+                "出勤打刻が完了しました";
+        
+        return ClockResponse.builder()
+                .success(true)
+                .attendanceRecordId(saved.getAttendanceId())
+                .clockInTime(now)
+                .lateMinutes(lateMinutes)
+                .message(message)
+                .build();
     }
     
     /**
      * 退勤打刻
      */
-    public ClockResult clockOut(Long employeeId) {
-        try {
-            LocalDateTime now = DateUtil.nowInJapan();
-            LocalDate today = now.toLocalDate();
+    public ClockResponse clockOut(Long employeeId) {
+        LocalDate today = DateUtil.getCurrentDate();
+        LocalDateTime now = DateUtil.getCurrentDateTime();
+        
+        // 出勤打刻チェック
+        AttendanceRecord record = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDate(employeeId, today)
+                .orElseThrow(() -> new BusinessException("NOT_CLOCKED_IN", "出勤打刻が必要です"));
+        
+        if (record.getClockInTime() == null) {
+            throw new BusinessException("NOT_CLOCKED_IN", "出勤打刻が必要です");
+        }
+        
+        if (record.getClockOutTime() != null) {
+            throw new BusinessException("ALREADY_CLOCKED_IN", "既に退勤打刻済みです");
+        }
+        
+        // 退勤打刻処理
+        record.setClockOutTime(now);
+        
+        // 勤怠時間計算（設計書ロジック使用）
+        AttendanceCalculationResult calculation = timeCalculator
+                .calculateAttendanceTimes(record.getClockInTime(), now);
+        
+        record.setEarlyLeaveMinutes(calculation.getEarlyLeaveMinutes());
+        record.setOvertimeMinutes(calculation.getOvertimeMinutes());
+        record.setNightShiftMinutes(calculation.getNightShiftMinutes());
+        
+        AttendanceRecord saved = attendanceRecordRepository.save(record);
+        
+        String message = calculation.getOvertimeMinutes() > 0 ?
+                String.format("退勤打刻が完了しました（%d分残業）", calculation.getOvertimeMinutes()) :
+                "退勤打刻が完了しました";
+        
+        return ClockResponse.builder()
+                .success(true)
+                .attendanceRecordId(saved.getAttendanceId())
+                .clockOutTime(now)
+                .overtimeMinutes(calculation.getOvertimeMinutes())
+                .nightShiftMinutes(calculation.getNightShiftMinutes())
+                .workingMinutes(calculation.getWorkingMinutes())
+                .message(message)
+                .build();
+    }
+    
+    /**
+     * 月末申請（設計書のチェックロジック完全再現）
+     */
+    public void submitMonthlyAttendance(Long employeeId, String targetMonth) {
+        validateMonthlySubmission(employeeId, targetMonth);
+        
+        // 当月の全勤怠記録を「申請済」に更新
+        YearMonth ym = YearMonth.parse(targetMonth);
+        LocalDate start = ym.atDay(1);
+        LocalDate end = ym.atEndOfMonth();
+        
+        List<AttendanceRecord> records = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDateBetween(employeeId, start, end);
+        
+        records.forEach(record -> record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.SUBMITTED));
+        attendanceRecordRepository.saveAll(records);
+    }
+    
+    /**
+     * 月末申請前チェック（設計書のJavaコード完全再現）
+     */
+    public void validateMonthlySubmission(Long employeeId, String targetMonth) {
+        // 1. 当月の営業日一覧を取得（土日祝日除外）
+        List<LocalDate> workingDays = DateUtil.getWorkingDays(targetMonth);
+        
+        // 2. 各営業日について出勤・退勤記録の存在確認
+        List<String> missingDates = new ArrayList<>();
+        for (LocalDate workingDay : workingDays) {
+            Optional<AttendanceRecord> recordOpt = attendanceRecordRepository
+                    .findByEmployeeIdAndAttendanceDate(employeeId, workingDay);
             
-            // 出勤記録チェック
-            Optional<AttendanceRecord> recordOpt = 
-                attendanceRecordRepository.findByEmployeeIdAndAttendanceDate(employeeId, today);
-            
-            if (recordOpt.isEmpty() || !recordOpt.get().hasClockInTime()) {
-                return ClockResult.failure("NOT_CLOCKED_IN", "出勤打刻が必要です");
+            if (recordOpt.isEmpty()) {
+                missingDates.add(workingDay.toString());
+                continue;
             }
             
             AttendanceRecord record = recordOpt.get();
             
-            if (record.hasClockOutTime()) {
-                return ClockResult.failure("ALREADY_CLOCKED_OUT", "本日は既に退勤打刻済みです");
+            // 3. 有給取得日は除外（attendance_status = 'paid_leave'）
+            if (AttendanceRecord.AttendanceStatus.PAID_LEAVE.equals(record.getAttendanceStatus())) {
+                continue;
             }
             
-            if (record.isFixed()) {
-                return ClockResult.failure("FIXED_ATTENDANCE", "確定済のため変更できません");
+            // 4. 通常勤務日の場合、出勤・退勤時刻が必須
+            if (record.getClockInTime() == null || record.getClockOutTime() == null) {
+                missingDates.add(workingDay.toString());
             }
+        }
+        
+        if (!missingDates.isEmpty()) {
+            Map<String, Object> details = new HashMap<>();
+            details.put("missingDates", missingDates);
+            details.put("totalWorkingDays", workingDays.size());
+            details.put("completedDays", workingDays.size() - missingDates.size());
             
-            // 退勤時刻設定
-            record.setClockOutTime(now);
+            throw new BusinessException("INCOMPLETE_ATTENDANCE", "打刻漏れがあります");
+        }
+        
+        // 5. 欠勤日がある場合は申請不可
+        List<AttendanceRecord> absentRecords = attendanceRecordRepository
+                .findByEmployeeIdAndYearMonthAndAttendanceStatus(employeeId, targetMonth, "absent");
+        
+        if (!absentRecords.isEmpty()) {
+            List<String> absentDates = absentRecords.stream()
+                    .map(record -> record.getAttendanceDate().toString())
+                    .collect(Collectors.toList());
             
-            // 各種時間計算
-            TimeCalculator.AttendanceCalculationResult calculation = 
-                TimeCalculator.calculateAttendanceTimes(record.getClockInTime(), now);
+            Map<String, Object> details = new HashMap<>();
+            details.put("absentDates", absentDates);
             
-            record.setEarlyLeaveMinutes(calculation.getEarlyLeaveMinutes());
-            record.setOvertimeMinutes(calculation.getOvertimeMinutes());
-            record.setNightShiftMinutes(calculation.getNightShiftMinutes());
-            
-            AttendanceRecord saved = attendanceRecordRepository.save(record);
-            
-            String message = buildClockOutMessage(calculation);
-            
-            return ClockResult.success(saved, message);
-            
-        } catch (Exception e) {
-            return ClockResult.failure("SYSTEM_ERROR", "システムエラーが発生しました");
+            throw new BusinessException("INCOMPLETE_ATTENDANCE", "欠勤日があるため申請できません");
         }
     }
     
     /**
      * 勤怠履歴取得
      */
-    @Transactional(readOnly = true)
-    public List<AttendanceRecord> getAttendanceHistory(Long employeeId, LocalDate fromDate, LocalDate toDate) {
-        return attendanceRecordRepository.findByEmployeeIdAndDateRange(employeeId, fromDate, toDate);
+    public AttendanceHistoryResponse getAttendanceHistory(AttendanceHistoryRequest request) {
+        // 期間設定
+        LocalDate startDate, endDate;
+        if (request.getYearMonth() != null) {
+            YearMonth ym = YearMonth.parse(request.getYearMonth());
+            startDate = ym.atDay(1);
+            endDate = ym.atEndOfMonth();
+        } else {
+            startDate = request.getDateFrom();
+            endDate = request.getDateTo();
+        }
+        
+        // 勤怠データ取得
+        List<AttendanceRecord> records = attendanceRecordRepository
+                .findByEmployeeIdAndAttendanceDateBetweenOrderByAttendanceDateAsc(
+                        request.getEmployeeId(), startDate, endDate);
+        
+        // 社員情報取得
+        Employee employee = employeeRepository.findById(request.getEmployeeId())
+                .orElseThrow(() -> new BusinessException("EMPLOYEE_NOT_FOUND", "社員が見つかりません"));
+        
+        // レスポンス構築
+        List<AttendanceInfo> attendanceList = records.stream().map(record -> 
+                AttendanceInfo.builder()
+                        .attendanceDate(record.getAttendanceDate().toString())
+                        .clockInTime(record.getClockInTime() != null ? 
+                                record.getClockInTime().toLocalTime().toString() : null)
+                        .clockOutTime(record.getClockOutTime() != null ? 
+                                record.getClockOutTime().toLocalTime().toString() : null)
+                        .lateMinutes(record.getLateMinutes())
+                        .earlyLeaveMinutes(record.getEarlyLeaveMinutes())
+                        .overtimeMinutes(record.getOvertimeMinutes())
+                        .nightShiftMinutes(record.getNightShiftMinutes())
+                        .attendanceStatus(record.getAttendanceStatus().getValue())
+                        .submissionStatus(record.getSubmissionStatus().getValue())
+                        .attendanceFixedFlag(record.getAttendanceFixedFlag())
+                        .build()
+        ).collect(Collectors.toList());
+        
+        // 集計データ計算
+        AttendanceSummary summary = calculateSummary(records);
+        
+        return AttendanceHistoryResponse.builder()
+                .success(true)
+                .employee(EmployeeInfo.builder()
+                        .employeeId(employee.getEmployeeId())
+                        .employeeName(employee.getEmployeeName())
+                        .employeeCode(employee.getEmployeeCode())
+                        .build())
+                .period(PeriodInfo.builder()
+                        .from(startDate.toString())
+                        .to(endDate.toString())
+                        .build())
+                .attendanceList(attendanceList)
+                .summary(summary)
+                .build();
     }
     
     /**
-     * 月次勤怠データ取得
+     * 勤怠集計計算
      */
-    @Transactional(readOnly = true)
-    public List<AttendanceRecord> getMonthlyAttendance(Long employeeId, YearMonth yearMonth) {
-        return attendanceRecordRepository.findByEmployeeIdAndYearMonth(
-            employeeId, yearMonth.getYear(), yearMonth.getMonthValue());
-    }
-    
-    /**
-     * 月末申請
-     * 1. 当月打刻漏れがないことが条件
-     * 2. 申請後は submission_status = '申請済'に設定
-     * 3. 管理者承認時は attendance_fixed_flag=1（勤怠データ確定）
-     */
-    public SubmissionResult submitMonthlyAttendance(Long employeeId, YearMonth yearMonth) {
-        try {
-            // 営業日一覧取得
-            List<LocalDate> workingDays = DateUtil.getWorkingDaysInMonth(
-                yearMonth.getYear(), yearMonth.getMonthValue());
-            
-            // 該当月のレコード取得
-            List<AttendanceRecord> monthlyRecords = getMonthlyAttendance(employeeId, yearMonth);
-            
-            // 打刻漏れチェック
-            for (LocalDate workingDay : workingDays) {
-                AttendanceRecord record = monthlyRecords.stream()
-                    .filter(r -> r.getAttendanceDate().equals(workingDay))
-                    .findFirst()
-                    .orElse(null);
-                
-                if (record == null) {
-                    return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
-                        "打刻漏れがあります", List.of(workingDay));
-                }
-                
-                // 有給の場合は打刻不要
-                if (record.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.PAID_LEAVE) {
-                    continue;
-                }
-                
-                // 通常勤務日の場合、出勤・退勤時刻が必須
-                if (!record.isCompleteAttendance()) {
-                    return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
-                        "出勤または退勤の打刻が不足しています", List.of(workingDay));
-                }
+    private AttendanceSummary calculateSummary(List<AttendanceRecord> records) {
+        int totalWorking = 0;
+        int totalOvertime = 0;
+        int totalNightShift = 0;
+        int totalLate = 0;
+        int totalEarlyLeave = 0;
+        int paidLeaveDays = 0;
+        int absentDays = 0;
+        
+        for (AttendanceRecord record : records) {
+            if (record.getClockInTime() != null && record.getClockOutTime() != null) {
+                AttendanceCalculationResult calc = timeCalculator
+                        .calculateAttendanceTimes(record.getClockInTime(), record.getClockOutTime());
+                totalWorking += calc.getWorkingMinutes();
             }
             
-            // 欠勤日がある場合は申請不可
-            List<AttendanceRecord> absentRecords = monthlyRecords.stream()
-                .filter(r -> r.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.ABSENT)
-                .toList();
+            totalOvertime += record.getOvertimeMinutes();
+            totalNightShift += record.getNightShiftMinutes();
+            totalLate += record.getLateMinutes();
+            totalEarlyLeave += record.getEarlyLeaveMinutes();
             
-            if (!absentRecords.isEmpty()) {
-                List<LocalDate> absentDates = absentRecords.stream()
-                    .map(AttendanceRecord::getAttendanceDate)
-                    .toList();
-                return SubmissionResult.failure("INCOMPLETE_ATTENDANCE", 
-                    "欠勤日があるため申請できません", absentDates);
+            if (AttendanceRecord.AttendanceStatus.PAID_LEAVE.equals(record.getAttendanceStatus())) {
+                paidLeaveDays++;
+            } else if (AttendanceRecord.AttendanceStatus.ABSENT.equals(record.getAttendanceStatus())) {
+                absentDays++;
             }
-            
-            // 申請済みに更新
-            for (AttendanceRecord record : monthlyRecords) {
-                if (record.getSubmissionStatus() == AttendanceRecord.SubmissionStatus.未提出) {
-                    record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.申請済);
-                    attendanceRecordRepository.save(record);
-                }
-            }
-            
-            long workingDaysCount = workingDays.size();
-            long completedDaysCount = monthlyRecords.stream()
-                .filter(AttendanceRecord::isCompleteAttendance)
-                .count();
-            long paidLeaveDaysCount = monthlyRecords.stream()
-                .filter(r -> r.getAttendanceStatus() == AttendanceRecord.AttendanceStatus.PAID_LEAVE)
-                .count();
-            
-            return SubmissionResult.success(workingDaysCount, completedDaysCount, paidLeaveDaysCount);
-            
-        } catch (Exception e) {
-            return SubmissionResult.failure("SYSTEM_ERROR", "システムエラーが発生しました", null);
-        }
-    }
-    
-    /**
-     * 月末申請承認（管理者用）
-     */
-    public boolean approveMonthlySubmission(Long employeeId, YearMonth yearMonth, Long approverId) {
-        try {
-            List<AttendanceRecord> records = attendanceRecordRepository
-                .findByEmployeeIdAndYearMonthAndSubmissionStatus(
-                    employeeId, yearMonth.getYear(), yearMonth.getMonthValue(), 
-                    AttendanceRecord.SubmissionStatus.申請済);
-            
-            for (AttendanceRecord record : records) {
-                record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.承認);
-                record.setAttendanceFixedFlag(true); // 勤怠データ確定
-                attendanceRecordRepository.save(record);
-            }
-            
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    
-    /**
-     * 月末申請却下（管理者用）
-     */
-    public boolean rejectMonthlySubmission(Long employeeId, YearMonth yearMonth, Long approverId) {
-        try {
-            List<AttendanceRecord> records = attendanceRecordRepository
-                .findByEmployeeIdAndYearMonthAndSubmissionStatus(
-                    employeeId, yearMonth.getYear(), yearMonth.getMonthValue(), 
-                    AttendanceRecord.SubmissionStatus.申請済);
-            
-            for (AttendanceRecord record : records) {
-                record.setSubmissionStatus(AttendanceRecord.SubmissionStatus.却下);
-                attendanceRecordRepository.save(record);
-            }
-            
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    
-    /**
-     * 勤怠集計
-     */
-    @Transactional(readOnly = true)
-    public AttendanceSummary getAttendanceSummary(Long employeeId, LocalDate fromDate, LocalDate toDate) {
-        Object[] result = attendanceRecordRepository.getAttendanceSummary(employeeId, fromDate, toDate);
-        
-        return new AttendanceSummary(
-            ((Number) result[0]).intValue(),  // totalLateMinutes
-            ((Number) result[1]).intValue(),  // totalEarlyLeaveMinutes
-            ((Number) result[2]).intValue(),  // totalOvertimeMinutes
-            ((Number) result[3]).intValue(),  // totalNightShiftMinutes
-            ((Number) result[4]).intValue(),  // paidLeaveDays
-            ((Number) result[5]).intValue()   // absentDays
-        );
-    }
-    
-    /**
-     * 退勤メッセージ生成
-     */
-    private String buildClockOutMessage(TimeCalculator.AttendanceCalculationResult calculation) {
-        StringBuilder message = new StringBuilder("退勤打刻が完了しました");
-        
-        if (calculation.getEarlyLeaveMinutes() > 0) {
-            message.append(String.format("（%d分早退）", calculation.getEarlyLeaveMinutes()));
-        } else if (calculation.getOvertimeMinutes() > 0) {
-            message.append(String.format("（%d分残業）", calculation.getOvertimeMinutes()));
         }
         
-        return message.toString();
-    }
-    
-    /**
-     * 打刻結果クラス
-     */
-    public static class ClockResult {
-        private final boolean success;
-        private final AttendanceRecord record;
-        private final String message;
-        private final String errorCode;
-        
-        private ClockResult(boolean success, AttendanceRecord record, String message, String errorCode) {
-            this.success = success;
-            this.record = record;
-            this.message = message;
-            this.errorCode = errorCode;
-        }
-        
-        public static ClockResult success(AttendanceRecord record, String message) {
-            return new ClockResult(true, record, message, null);
-        }
-        
-        public static ClockResult failure(String errorCode, String message) {
-            return new ClockResult(false, null, message, errorCode);
-        }
-        
-        public boolean isSuccess() { return success; }
-        public AttendanceRecord getRecord() { return record; }
-        public String getMessage() { return message; }
-        public String getErrorCode() { return errorCode; }
-    }
-    
-    /**
-     * 月末申請結果クラス
-     */
-    public static class SubmissionResult {
-        private final boolean success;
-        private final String errorCode;
-        private final String message;
-        private final List<LocalDate> missingDates;
-        private final Long workingDaysCount;
-        private final Long completedDaysCount;
-        private final Long paidLeaveDaysCount;
-        
-        private SubmissionResult(boolean success, String errorCode, String message,
-                               List<LocalDate> missingDates, Long workingDaysCount,
-                               Long completedDaysCount, Long paidLeaveDaysCount) {
-            this.success = success;
-            this.errorCode = errorCode;
-            this.message = message;
-            this.missingDates = missingDates;
-            this.workingDaysCount = workingDaysCount;
-            this.completedDaysCount = completedDaysCount;
-            this.paidLeaveDaysCount = paidLeaveDaysCount;
-        }
-        
-        public static SubmissionResult success(Long workingDaysCount, Long completedDaysCount, Long paidLeaveDaysCount) {
-            return new SubmissionResult(true, null, "月末申請が完了しました", 
-                null, workingDaysCount, completedDaysCount, paidLeaveDaysCount);
-        }
-        
-        public static SubmissionResult failure(String errorCode, String message, List<LocalDate> missingDates) {
-            return new SubmissionResult(false, errorCode, message, missingDates, null, null, null);
-        }
-        
-
-        public boolean isSuccess() { return success; }
-        public String getErrorCode() { return errorCode; }
-        public String getMessage() { return message; }
-        public List<LocalDate> getMissingDates() { return missingDates; }
-        public Long getWorkingDaysCount() { return workingDaysCount; }
-        public Long getCompletedDaysCount() { return completedDaysCount; }
-        public Long getPaidLeaveDaysCount() { return paidLeaveDaysCount; }
-    }
-    
-    /**
-     * 勤怠集計クラス
-     */
-    public static class AttendanceSummary {
-        private final int totalLateMinutes;
-        private final int totalEarlyLeaveMinutes;
-        private final int totalOvertimeMinutes;
-        private final int totalNightShiftMinutes;
-        private final int paidLeaveDays;
-        private final int absentDays;
-        
-        public AttendanceSummary(int totalLateMinutes, int totalEarlyLeaveMinutes,
-                               int totalOvertimeMinutes, int totalNightShiftMinutes,
-                               int paidLeaveDays, int absentDays) {
-            this.totalLateMinutes = totalLateMinutes;
-            this.totalEarlyLeaveMinutes = totalEarlyLeaveMinutes;
-            this.totalOvertimeMinutes = totalOvertimeMinutes;
-            this.totalNightShiftMinutes = totalNightShiftMinutes;
-            this.paidLeaveDays = paidLeaveDays;
-            this.absentDays = absentDays;
-        }
-        
-    
-        public int getTotalLateMinutes() { return totalLateMinutes; }
-        public int getTotalEarlyLeaveMinutes() { return totalEarlyLeaveMinutes; }
-        public int getTotalOvertimeMinutes() { return totalOvertimeMinutes; }
-        public int getTotalNightShiftMinutes() { return totalNightShiftMinutes; }
-        public int getPaidLeaveDays() { return paidLeaveDays; }
-        public int getAbsentDays() { return absentDays; }
+        return AttendanceSummary.builder()
+                .totalWorkingMinutes(totalWorking)
+                .totalOvertimeMinutes(totalOvertime)
+                .totalNightShiftMinutes(totalNightShift)
+                .totalLateMinutes(totalLate)
+                .totalEarlyLeaveMinutes(totalEarlyLeave)
+                .paidLeaveDays(paidLeaveDays)
+                .absentDays(absentDays)
+                .build();
     }
 }

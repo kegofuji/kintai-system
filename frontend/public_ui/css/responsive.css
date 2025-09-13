@@ -1,619 +1,392 @@
-/* レスポンシブデザイン CSS（スマホ対応） */
+/* レスポンシブデザイン - 設計書の画面仕様準拠 */
 
-/* ===== ブレイクポイント定義 ===== */
-/* 
-- xs: ~575px (スマートフォン)
-- sm: 576px~767px (小型タブレット)
-- md: 768px~991px (タブレット)
-- lg: 992px~1199px (デスクトップ)
-- xl: 1200px~ (大型デスクトップ)
-*/
-
-/* ===== 大型デスクトップ（1200px以上） ===== */
-@media (min-width: 1200px) {
-    .main-content {
-        max-width: 1400px;
-    }
-    
-    .admin-menu-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    
-    .login-container {
-        max-width: 450px;
-    }
-}
-
-/* ===== デスクトップ（992px以上1199px以下） ===== */
-@media (min-width: 992px) and (max-width: 1199px) {
-    .main-content {
-        padding: var(--spacing-md);
-    }
-    
-    .admin-menu-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .clock-buttons {
-        gap: var(--spacing-lg);
-    }
-    
-    .btn-clock {
-        width: 100px;
-        height: 100px;
-        font-size: var(--font-size-large);
-    }
-}
-
-/* ===== タブレット（768px以上991px以下） ===== */
-@media (min-width: 768px) and (max-width: 991px) {
-    /* ナビゲーション調整 */
-    .navbar {
-        flex-direction: column;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md);
-    }
-    
-    .navbar-menu {
-        order: 2;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: var(--spacing-md);
-    }
-    
-    .navbar-user {
-        order: 3;
-        flex-direction: column;
-        text-align: center;
-        gap: var(--spacing-xs);
-    }
-    
-    /* メインコンテンツ調整 */
-    .main-content {
-        padding: var(--spacing-md);
-    }
-    
-    .clock-container {
-        padding: var(--spacing-lg);
+/* タブレット（768px - 1024px） */
+@media (max-width: 1024px) {
+    .dashboard-container,
+    .admin-dashboard {
+        padding: 15px;
     }
     
     .clock-buttons {
         flex-direction: column;
         align-items: center;
-        gap: var(--spacing-md);
+        gap: 15px;
     }
     
-    .btn-clock {
-        width: 120px;
-        height: 80px;
-        border-radius: var(--border-radius-lg);
-    }
-    
-    /* 管理者メニュー調整 */
-    .admin-menu-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-    }
-    
-    /* テーブル調整 */
-    .table {
-        font-size: var(--font-size-small);
-    }
-    
-    .table th,
-    .table td {
-        padding: var(--spacing-xs) var(--spacing-sm);
-    }
-    
-    /* フォーム調整 */
-    .form-control {
-        padding: var(--spacing-md);
-        font-size: var(--font-size-base);
-    }
-    
-    /* ログイン画面調整 */
-    .login-container {
-        max-width: 500px;
-        padding: var(--spacing-lg);
-        margin: var(--spacing-md);
-    }
-    
-    /* モーダル調整 */
-    .modal-content {
-        width: 95%;
-        margin: var(--spacing-md);
-    }
-}
-
-/* ===== 小型タブレット（576px以上767px以下） ===== */
-@media (min-width: 576px) and (max-width: 767px) {
-    /* ナビゲーション調整 */
-    .navbar-brand h2 {
-        font-size: var(--font-size-large);
-    }
-    
-    .navbar-menu {
-        flex-direction: column;
-        width: 100%;
-        text-align: center;
-    }
-    
-    .navbar-menu a {
-        padding: var(--spacing-sm);
-        margin: 2px 0;
-    }
-    
-    /* 出退勤エリア調整 */
-    .clock-container {
-        padding: var(--spacing-md);
-    }
-    
-    .status-info {
-        flex-direction: column;
-        gap: var(--spacing-md);
-    }
-    
-    .status-item {
-        flex-direction: row;
-        justify-content: space-between;
-        padding: var(--spacing-sm);
-        background-color: var(--light-gray);
-        border-radius: var(--border-radius);
-    }
-    
-    /* テーブルレスポンシブ対応 */
-    .table-responsive {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .table {
-        min-width: 600px;
-    }
-    
-    /* カード表示への切り替え */
-    .table-card {
-        display: none;
-    }
-}
-
-/* ===== スマートフォン（575px以下） ===== */
-@media (max-width: 575px) {
-    /* 基本フォントサイズ調整 */
-    :root {
-        --font-size-base: 16px;
-        --spacing-md: 12px;
-        --spacing-lg: 16px;
-        --spacing-xl: 24px;
-    }
-    
-    /* ナビゲーション完全モバイル対応 */
-    .navbar {
-        flex-direction: column;
-        padding: var(--spacing-sm);
-    }
-    
-    .navbar-brand h2 {
-        font-size: var(--font-size-base);
-        text-align: center;
-    }
-    
-    .navbar-menu {
-        width: 100%;
-        flex-direction: column;
-        background-color: var(--light-gray);
-        border-radius: var(--border-radius);
-        padding: var(--spacing-sm);
-        margin-top: var(--spacing-sm);
-    }
-    
-    .navbar-menu a {
-        display: block;
-        width: 100%;
-        padding: var(--spacing-sm);
-        margin: 2px 0;
-        text-align: center;
-        border-radius: var(--border-radius);
-    }
-    
-    .navbar-user {
-        width: 100%;
-        flex-direction: column;
-        text-align: center;
-        margin-top: var(--spacing-sm);
-        padding-top: var(--spacing-sm);
-        border-top: 1px solid var(--border-color);
-    }
-    
-    /* メインコンテンツ調整 */
-    .main-content {
-        padding: var(--spacing-sm);
-    }
-    
-    .content-area {
-        padding: var(--spacing-md);
-        margin-bottom: var(--spacing-md);
-    }
-    
-    /* 出退勤エリアモバイル対応 */
-    .clock-container {
-        padding: var(--spacing-md);
-    }
-    
-    .clock-buttons {
-        flex-direction: column;
-        gap: var(--spacing-md);
-    }
-    
-    .btn-clock {
+    .btn-clock-in, .btn-clock-out {
         width: 100%;
         max-width: 200px;
-        height: 60px;
-        border-radius: var(--border-radius-lg);
-        font-size: var(--font-size-large);
     }
     
-    .status-info {
-        flex-direction: column;
-        gap: var(--spacing-sm);
+    .admin-card {
+        margin-bottom: 15px;
     }
     
-    .status-item {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        padding: var(--spacing-md);
-        background-color: var(--light-gray);
-        border-radius: var(--border-radius);
+    .table-responsive {
+        font-size: 14px;
     }
-    
-    .status-label {
-        margin-bottom: 0;
-        font-size: var(--font-size-base);
-    }
-    
-    /* テーブルをカード表示に切り替え */
-    .table {
-        display: none;
-    }
-    
-    .table-card {
-        display: block;
-    }
-    
-    .card-item {
-        background-color: var(--white);
-        border: var(--border-width) solid var(--border-color);
-        border-radius: var(--border-radius);
-        margin-bottom: var(--spacing-md);
-        padding: var(--spacing-md);
-        box-shadow: var(--shadow-sm);
-    }
-    
-    .card-header {
-        font-weight: 600;
-        color: var(--primary-color);
-        margin-bottom: var(--spacing-sm);
-        padding-bottom: var(--spacing-sm);
-        border-bottom: 1px solid var(--border-color);
-    }
-    
-    .card-body {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-xs);
-    }
-    
-    .card-row {
-        display: flex;
-        justify-content: space-between;
-        padding: var(--spacing-xs) 0;
-    }
-    
-    .card-label {
-        font-weight: 500;
-        color: var(--dark-gray);
-        flex: 1;
-    }
-    
-    .card-value {
-        flex: 2;
-        text-align: right;
-        color: var(--darker-gray);
-    }
-    
-    /* フォーム調整 */
-    .form-group {
-        margin-bottom: var(--spacing-md);
-    }
-    
-    .form-control {
-        padding: var(--spacing-md);
-        font-size: 16px; /* iOS Safari のズーム防止 */
-    }
-    
-    .btn {
-        padding: var(--spacing-md);
-        font-size: var(--font-size-base);
-    }
-    
-    .btn-login {
-        padding: var(--spacing-lg);
-        font-size: var(--font-size-large);
-    }
-    
-    /* 管理者メニューモバイル対応 */
-    .admin-menu-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-    }
-    
-    .menu-card {
-        padding: var(--spacing-md);
-    }
-    
-    .menu-card h3 {
-        font-size: var(--font-size-base);
-    }
-    
-    /* ログイン画面モバイル対応 */
-    .login-screen {
-        padding: var(--spacing-md);
-    }
-    
-    .login-container {
-        max-width: 100%;
-        padding: var(--spacing-lg);
-        margin: 0;
-    }
-    
-    .login-header h1 {
-        font-size: var(--font-size-xl);
-    }
-    
-    .test-accounts {
-        font-size: var(--font-size-small);
-    }
-    
-    /* モーダルモバイル対応 */
-    .modal-content {
-        width: calc(100% - 20px);
-        margin: 10px;
-        max-height: calc(100vh - 40px);
-    }
-    
-    .modal-header,
-    .modal-body,
-    .modal-footer {
-        padding: var(--spacing-md);
-    }
-    
-    .modal-footer {
-        flex-direction: column;
-        gap: var(--spacing-sm);
-    }
-    
-    .modal-footer .btn {
-        width: 100%;
-    }
-    
-    /* メッセージ表示調整 */
+}
+
+/* スマートフォン（最大768px） */
+@media (max-width: 768px) {
+    /* メッセージ表示の調整 */
     .message-container {
         top: 10px;
         right: 10px;
         left: 10px;
-        max-width: none;
+        min-width: auto;
     }
     
-    .message {
-        padding: var(--spacing-md);
-        font-size: var(--font-size-base);
-    }
-    
-    /* 検索・フィルター調整 */
-    .search-container {
-        flex-direction: column;
-        gap: var(--spacing-sm);
-    }
-    
-    .search-container .form-control,
-    .search-container .btn {
-        width: 100%;
-    }
-    
-    /* ページネーション調整 */
-    .pagination {
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: var(--spacing-xs);
-    }
-    
-    .pagination .btn {
-        min-width: 40px;
-        padding: var(--spacing-sm);
-    }
-}
-
-/* ===== 極小画面（320px以下） ===== */
-@media (max-width: 320px) {
-    :root {
-        --spacing-sm: 6px;
-        --spacing-md: 10px;
-        --spacing-lg: 14px;
-    }
-    
+    /* ログイン画面 */
     .login-container {
-        padding: var(--spacing-md);
+        padding: 20px;
     }
     
-    .login-header h1 {
-        font-size: var(--font-size-large);
+    .login-card {
+        padding: 30px 20px;
+        margin: 0 10px;
     }
     
-    .btn-clock {
-        height: 50px;
-        font-size: var(--font-size-base);
+    .login-title {
+        font-size: 20px;
+        margin-bottom: 25px;
     }
     
-    .navbar-brand h2 {
-        font-size: var(--font-size-small);
-    }
-}
-
-/* ===== 横向き表示対応 ===== */
-@media (max-height: 500px) and (orientation: landscape) {
-    .login-screen {
-        padding: var(--spacing-sm);
+    /* ナビゲーション */
+    .navbar-brand {
+        font-size: 18px;
     }
     
-    .login-container {
-        max-height: 90vh;
-        overflow-y: auto;
-        padding: var(--spacing-md);
+    .nav-link {
+        padding: 8px 12px;
+        font-size: 14px;
     }
     
-    .test-accounts {
-        display: none;
+    /* ダッシュボード */
+    .dashboard-container,
+    .admin-dashboard {
+        padding: 10px;
     }
     
-    .clock-container {
-        padding: var(--spacing-sm);
+    .clock-section {
+        padding: 20px 15px;
+        margin-bottom: 20px;
     }
     
     .clock-buttons {
-        flex-direction: row;
-        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
     }
     
-    .btn-clock {
-        width: 100px;
-        height: 50px;
-    }
-}
-
-/* ===== タッチデバイス対応 ===== */
-@media (hover: none) and (pointer: coarse) {
-    /* タッチ操作向けのボタンサイズ調整 */
-    .btn {
-        min-height: 44px;
-        min-width: 44px;
+    .btn-clock-in, .btn-clock-out {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 16px;
+        min-width: auto;
     }
     
-    .navbar-menu a {
-        min-height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    /* タッチ操作時のホバー効果を無効化 */
-    .btn:hover,
-    .menu-card:hover,
-    .table tr:hover {
-        transform: none;
-        box-shadow: inherit;
-        background-color: inherit;
-    }
-    
-    /* タッチ時のフィードバック */
-    .btn:active {
-        transform: scale(0.98);
-        opacity: 0.8;
-    }
-    
-    .menu-card:active {
-        transform: scale(0.98);
-        opacity: 0.9;
-    }
-}
-
-/* ===== ダークモード対応 ===== */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --white: #1a1a1a;
-        --light-gray: #2d2d2d;
-        --gray: #404040;
-        --dark-gray: #cccccc;
-        --darker-gray: #e0e0e0;
-        --black: #ffffff;
-        --border-color: #404040;
-    }
-    
-    .login-screen {
-        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-    }
-    
-    .navbar {
-        background-color: #2d2d2d;
-        border-bottom-color: #404040;
-    }
-    
-    .admin-navbar {
-        background: linear-gradient(135deg, #1a1a1a, var(--primary-dark));
-    }
-}
-
-/* ===== 印刷時の調整 ===== */
-@media print {
-    .navbar,
-    .modal-overlay,
-    .message-container,
-    .loading-overlay {
-        display: none !important;
-    }
-    
-    .main-content {
-        max-width: none;
-        padding: 0;
-        box-shadow: none;
-    }
-    
-    .content-area {
-        box-shadow: none;
-        border: 1px solid #ccc;
+    /* テーブル */
+    .attendance-table,
+    .employee-table,
+    .approval-section {
+        padding: 15px;
+        margin-bottom: 15px;
     }
     
     .table {
         font-size: 12px;
     }
     
-    .btn {
-        border: 1px solid #ccc;
-        background-color: transparent !important;
-        color: #000 !important;
+    .table th,
+    .table td {
+        padding: 8px 4px;
+    }
+    
+    /* 申請フォーム */
+    .request-form {
+        padding: 20px 15px;
+        margin-bottom: 15px;
+    }
+    
+    .form-control,
+    .form-select {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+    
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    /* 管理者カード */
+    .admin-card {
+        padding: 20px 15px;
+        margin-bottom: 15px;
+    }
+    
+    .admin-card h5 {
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+    
+    .admin-card .card-text {
+        font-size: 13px;
+    }
+    
+    /* 承認タブ */
+    .approval-tab {
+        padding: 10px 15px;
+        font-size: 14px;
+    }
+    
+    /* 従業員アクション */
+    .employee-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+    
+    /* モーダル */
+    .modal-dialog {
+        margin: 10px;
+    }
+    
+    .modal-content {
+        border-radius: 8px;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .modal-footer {
+        padding: 15px 20px;
     }
 }
 
-/* ===== 高コントラストモード対応 ===== */
-@media (prefers-contrast: high) {
-    :root {
-        --primary-color: #0052cc;
-        --border-color: #000000;
-        --shadow-sm: 0 2px 4px rgba(0,0,0,0.8);
-        --shadow-md: 0 4px 8px rgba(0,0,0,0.8);
+/* 小さいスマートフォン（最大480px） */
+@media (max-width: 480px) {
+    /* ログイン画面 */
+    .login-card {
+        padding: 25px 15px;
+        margin: 0 5px;
     }
     
-    .btn {
-        border-width: 2px;
+    .login-title {
+        font-size: 18px;
+        margin-bottom: 20px;
     }
     
-    .form-control:focus {
-        box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.5);
+    /* ダッシュボード */
+    .clock-section {
+        padding: 15px 10px;
+    }
+    
+    .clock-section h4 {
+        font-size: 18px;
+    }
+    
+    .btn-clock-in, .btn-clock-out {
+        padding: 10px 15px;
+        font-size: 14px;
+    }
+    
+    /* テーブル */
+    .table {
+        font-size: 11px;
+    }
+    
+    .table th,
+    .table td {
+        padding: 6px 2px;
+    }
+    
+    /* 申請フォーム */
+    .request-form {
+        padding: 15px 10px;
+    }
+    
+    .form-label {
+        font-size: 14px;
+    }
+    
+    .form-control,
+    .form-select {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+    
+    /* 管理者カード */
+    .admin-card {
+        padding: 15px 10px;
+    }
+    
+    .admin-card h5 {
+        font-size: 14px;
+    }
+    
+    .admin-card .card-text {
+        font-size: 12px;
+    }
+    
+    /* 承認タブ */
+    .approval-tab {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    
+    /* ステータスバッジ */
+    .status-badge {
+        padding: 2px 6px;
+        font-size: 10px;
     }
 }
 
-/* ===== モーション軽減対応 ===== */
+/* 横画面スマートフォン（最大768px、高さが幅より小さい） */
+@media (max-width: 768px) and (orientation: landscape) {
+    .login-container {
+        padding: 10px;
+    }
+    
+    .login-card {
+        padding: 20px;
+        max-width: 500px;
+    }
+    
+    .clock-buttons {
+        flex-direction: row;
+        justify-content: center;
+        gap: 15px;
+    }
+    
+    .btn-clock-in, .btn-clock-out {
+        width: auto;
+        min-width: 120px;
+    }
+    
+    .dashboard-container,
+    .admin-dashboard {
+        padding: 10px 5px;
+    }
+    
+    .table {
+        font-size: 11px;
+    }
+    
+    .table th,
+    .table td {
+        padding: 4px 2px;
+    }
+}
+
+/* 高解像度ディスプレイ対応 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .btn-clock-in, .btn-clock-out {
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .card {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .admin-card {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+}
+
+/* 印刷用スタイル */
+@media print {
+    .navbar-custom,
+    .clock-buttons,
+    .btn,
+    .message-container,
+    .loading-overlay {
+        display: none !important;
+    }
+    
+    .dashboard-container,
+    .admin-dashboard {
+        padding: 0;
+    }
+    
+    .attendance-table,
+    .employee-table,
+    .approval-section {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .table {
+        font-size: 12px;
+    }
+    
+    .table th,
+    .table td {
+        border: 1px solid #ddd;
+        padding: 4px;
+    }
+}
+
+/* アクセシビリティ対応 */
 @media (prefers-reduced-motion: reduce) {
-    *,
-    ::before,
-    ::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+    .btn-clock-in,
+    .btn-clock-out,
+    .btn-primary,
+    .card,
+    .admin-card {
+        transition: none;
     }
     
-    .loading-spinner {
+    .fade-in,
+    .slide-in {
         animation: none;
-        border-top-color: var(--primary-color);
+    }
+}
+
+/* ダークモード対応（システム設定に基づく） */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #1a1a1a;
+        color: #e9ecef;
+    }
+    
+    .card,
+    .attendance-table,
+    .employee-table,
+    .approval-section,
+    .request-form,
+    .admin-card {
+        background-color: #2d2d2d;
+        color: #e9ecef;
+    }
+    
+    .table th {
+        background-color: #3d3d3d;
+        color: #e9ecef;
+    }
+    
+    .form-control,
+    .form-select {
+        background-color: #3d3d3d;
+        border-color: #555;
+        color: #e9ecef;
+    }
+    
+    .form-control:focus,
+    .form-select:focus {
+        background-color: #3d3d3d;
+        border-color: #667eea;
+        color: #e9ecef;
     }
 }

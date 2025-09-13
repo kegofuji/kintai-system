@@ -3,282 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>勤怠管理システム 月次レポート</title>
+    <title>勤怠管理レポート</title>
     <style>
-        /* PDF生成用スタイル（出力項目） */
-        body {
-            font-family: 'Hiragino Sans GB', 'MS Gothic', sans-serif;
-            font-size: 10pt;
-            line-height: 1.4;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 15px;
-        }
-
-        .header h1 {
-            font-size: 16pt;
-            font-weight: bold;
-            margin: 0;
-            color: #333;
-        }
-
-        .info-section {
-            margin-bottom: 25px;
-        }
-
-        .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-
-        .info-table th {
-            background-color: #f0f0f0;
-            border: 1px solid #333;
-            padding: 8px;
-            text-align: left;
-            width: 25%;
-            font-weight: bold;
-        }
-
-        .info-table td {
-            border: 1px solid #333;
-            padding: 8px;
-            text-align: left;
-        }
-
-        .section-title {
-            font-size: 12pt;
-            font-weight: bold;
-            margin: 20px 0 10px 0;
-            color: #333;
-            border-left: 4px solid #0066cc;
-            padding-left: 8px;
-        }
-
-        .attendance-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            font-size: 9pt;
-        }
-
-        .attendance-table th {
-            background-color: #333;
-            color: white;
-            border: 1px solid #333;
-            padding: 6px 4px;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .attendance-table td {
-            border: 1px solid #333;
-            padding: 4px;
-            text-align: center;
-            background-color: #fafafa;
-        }
-
-        .attendance-table tr:nth-child(even) td {
-            background-color: #f0f0f0;
-        }
-
-        .summary-section {
-            margin-top: 25px;
-        }
-
-        .summary-table {
-            width: 60%;
-            border-collapse: collapse;
-        }
-
-        .summary-table th {
-            background-color: #f0f0f0;
-            border: 1px solid #333;
-            padding: 8px;
-            text-align: left;
-            font-weight: bold;
-            width: 40%;
-        }
-
-        .summary-table td {
-            border: 1px solid #333;
-            padding: 8px;
-            text-align: right;
-            font-weight: bold;
-        }
-
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 8pt;
-            color: #666;
-            border-top: 1px solid #ccc;
-            padding-top: 10px;
-        }
-
-        .status-fixed {
-            color: #0066cc;
-            font-weight: bold;
-        }
-
-        .status-pending {
-            color: #ff6600;
-        }
-
-        .status-rejected {
-            color: #cc0000;
-        }
-
-        .time-overtime {
-            color: #ff6600;
-            font-weight: bold;
-        }
-
-        .time-night {
-            color: #6600cc;
-            font-weight: bold;
-        }
-
-        .time-late {
-            color: #cc0000;
-        }
-
-        @page {
-            margin: 2cm;
-            @bottom-center {
-                content: "- " counter(page) " -";
-                font-size: 8pt;
-                color: #666;
-            }
-        }
-
-        @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-        }
+        /* PDF用スタイルは pdf_service.py の _get_pdf_css() に統合 */
     </style>
 </head>
 <body>
-    <!-- ヘッダー部 -->
+    <!-- ヘッダー部分 -->
     <div class="header">
-        <h1>勤怠管理システム 月次レポート</h1>
+        <h1>勤怠管理レポート</h1>
+        <div class="report-info">
+            <div class="info-section">
+                <span class="label">対象期間：</span>{{ period.from }} ～ {{ period.to }}
+            </div>
+            <div class="info-section">
+                <span class="label">社員名：</span>{{ employee.employeeName }}
+            </div>
+            <div class="info-section">
+                <span class="label">社員コード：</span>{{ employee.employeeCode }}
+            </div>
+            <div class="info-section">
+                <span class="label">生成日時：</span>{{ generated_at }}
+            </div>
+        </div>
     </div>
 
-    <!-- 基本情報部（設計書通りの項目） -->
-    <div class="info-section">
-        <table class="info-table">
-            <tr>
-                <th>対象年月</th>
-                <td>{{ year_month }}</td>
-                <th>社員名</th>
-                <td>{{ employee.employee_name }}</td>
-            </tr>
-            <tr>
-                <th>社員コード</th>
-                <td>{{ employee.employee_code }}</td>
-                <th>出力日時</th>
-                <td>{{ generated_at }}</td>
-            </tr>
-            <tr>
-                <th>対象期間</th>
-                <td colspan="3">{{ period.from }} ～ {{ period.to }}</td>
-            </tr>
+    <!-- 日次明細テーブル -->
+    <div class="daily-details">
+        <h2>日次勤怠明細</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>日付</th>
+                    <th>出勤時刻</th>
+                    <th>退勤時刻</th>
+                    <th>遅刻時間</th>
+                    <th>早退時間</th>
+                    <th>残業時間</th>
+                    <th>深夜時間</th>
+                    <th>ステータス</th>
+                    <th>承認状況</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in attendance_list %}
+                <tr>
+                    <td>{{ record.attendanceDate }}</td>
+                    <td>{{ record.clockInTime or '-' }}</td>
+                    <td>{{ record.clockOutTime or '-' }}</td>
+                    <td>{{ record.late_time_formatted }}</td>
+                    <td>{{ record.early_leave_time_formatted }}</td>
+                    <td>{{ record.overtime_time_formatted }}</td>
+                    <td>{{ record.night_shift_time_formatted }}</td>
+                    <td>{{ record.attendance_status_jp }}</td>
+                    <td>
+                        {% if record.attendanceFixedFlag %}
+                            確定済
+                        {% else %}
+                            {{ record.submission_status_jp }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
 
-    <!-- 日次明細部（出力項目） -->
-    <div class="section-title">日次勤怠明細</div>
-    <table class="attendance-table">
-        <thead>
-            <tr>
-                <th>日付</th>
-                <th>出勤時刻</th>
-                <th>退勤時刻</th>
-                <th>遅刻</th>
-                <th>早退</th>
-                <th>残業</th>
-                <th>深夜</th>
-                <th>ステータス</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for record in attendance_list %}
-            <tr>
-                <td>{{ record.attendance_date }}</td>
-                <td>{{ record.clock_in_time or '-' }}</td>
-                <td>{{ record.clock_out_time or '-' }}</td>
-                <td class="{% if record.late_minutes > 0 %}time-late{% endif %}">
-                    {{ format_minutes_to_hhmm(record.late_minutes) }}
-                </td>
-                <td>{{ format_minutes_to_hhmm(record.early_leave_minutes) }}</td>
-                <td class="{% if record.overtime_minutes > 0 %}time-overtime{% endif %}">
-                    {{ format_minutes_to_hhmm(record.overtime_minutes) }}
-                </td>
-                <td class="{% if record.night_shift_minutes > 0 %}time-night{% endif %}">
-                    {{ format_minutes_to_hhmm(record.night_shift_minutes) }}
-                </td>
-                <td class="{% if record.attendance_fixed_flag %}status-fixed{% elif record.submission_status == '却下' %}status-rejected{% else %}status-pending{% endif %}">
-                    {% if record.attendance_fixed_flag %}
-                        確定
-                    {% else %}
-                        {{ record.submission_status }}
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- 集計情報部（集計項目） -->
-    <div class="section-title">月次集計</div>
+    <!-- 集計テーブル -->
     <div class="summary-section">
+        <h2>月次集計</h2>
         <table class="summary-table">
-            <tr>
-                <th>実働合計</th>
-                <td>{{ format_minutes_to_hhmm(summary.total_working_minutes) }}</td>
-            </tr>
-            <tr>
-                <th>残業合計</th>
-                <td class="time-overtime">{{ format_minutes_to_hhmm(summary.total_overtime_minutes) }}</td>
-            </tr>
-            <tr>
-                <th>深夜合計</th>
-                <td class="time-night">{{ format_minutes_to_hhmm(summary.total_night_shift_minutes) }}</td>
-            </tr>
-            <tr>
-                <th>遅刻回数/時間</th>
-                <td class="time-late">{{ count_late_days(attendance_list) }}回 / {{ format_minutes_to_hhmm(summary.total_late_minutes) }}</td>
-            </tr>
-            <tr>
-                <th>早退回数/時間</th>
-                <td>{{ count_early_leave_days(attendance_list) }}回 / {{ format_minutes_to_hhmm(summary.total_early_leave_minutes) }}</td>
-            </tr>
-            <tr>
-                <th>有給取得日数</th>
-                <td>{{ summary.paid_leave_days }}日</td>
-            </tr>
-            <tr>
-                <th>欠勤日数</th>
-                <td>{{ summary.absent_days }}日</td>
-            </tr>
+            <tbody>
+                <tr>
+                    <th>実働時間合計</th>
+                    <td>{{ summary.total_working_formatted }}</td>
+                </tr>
+                <tr>
+                    <th>残業時間合計</th>
+                    <td>{{ summary.total_overtime_formatted }}</td>
+                </tr>
+                <tr>
+                    <th>深夜勤務時間合計</th>
+                    <td>{{ summary.total_night_shift_formatted }}</td>
+                </tr>
+                <tr>
+                    <th>遅刻時間合計</th>
+                    <td>{{ summary.total_late_formatted }}</td>
+                </tr>
+                <tr>
+                    <th>早退時間合計</th>
+                    <td>{{ summary.total_early_leave_formatted }}</td>
+                </tr>
+                <tr>
+                    <th>有給取得日数</th>
+                    <td>{{ summary.paidLeaveDays }}日</td>
+                </tr>
+                <tr>
+                    <th>欠勤日数</th>
+                    <td>{{ summary.absentDays }}日</td>
+                </tr>
+            </tbody>
         </table>
     </div>
 
-    <!-- フッター部 -->
+    <!-- 遅刻・早退回数詳細 -->
+    <div class="detail-counts">
+        <h3>詳細情報</h3>
+        <table class="summary-table">
+            <tbody>
+                <tr>
+                    <th>遅刻回数</th>
+                    <td>
+                        {% set late_count = attendance_list | selectattr('lateMinutes', 'gt', 0) | list | length %}
+                        {{ late_count }}回
+                    </td>
+                </tr>
+                <tr>
+                    <th>早退回数</th>
+                    <td>
+                        {% set early_count = attendance_list | selectattr('earlyLeaveMinutes', 'gt', 0) | list | length %}
+                        {{ early_count }}回
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- フッター -->
     <div class="footer">
-        <p>本レポートは勤怠管理システムにより自動生成されました。</p>
-        <p>※ 遅刻分・早退分・残業分・深夜分は分単位で保存され、表示時にhh:mm形式に変換されています。</p>
-        <p>※ 残業時間と深夜時間は重複してカウントされます（22:00以降の残業は両方にカウント）。</p>
+        <p>勤怠管理システム - PDFレポート出力</p>
+        <p>※このレポートは自動生成されています</p>
     </div>
 </body>
 </html>

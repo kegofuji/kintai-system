@@ -1,157 +1,172 @@
-/**
- * 勤怠サービス（出退勤・履歴管理）
- */
-
+// 勤怠サービス（設計書のAPI仕様完全準拠）
 class AttendanceService {
     constructor() {
-        this.baseUrl = CONFIG.API_BASE_URL;
+        this.baseUrl = CONFIG.getApiBaseUrl();
+        this.pdfUrl = CONFIG.getPdfApiUrl();
     }
-    
+
     /**
-     * 出勤打刻
+     * 共通API呼び出し処理
+     * @param {string} endpoint - エンドポイント
+     * @param {Object} options - オプション
+     * @returns {Promise<Object>} API応答
      */
-    async clockIn(employeeId) {
+    async apiCall(endpoint, options = {}) {
         try {
-            const response = await fetch(`${this.baseUrl}/attendance/clock-in`, {
-                method: 'POST',
+            const url = `${this.baseUrl}${endpoint}`;
+            const token = localStorage.getItem('kintai_session_token');
+            
+            const defaultOptions = {
                 headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ employeeId })
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            };
+
+            const response = await fetch(url, {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...options.headers
+                }
             });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '勤怠履歴の取得に失敗しました');
+
+            const data = await response.json();
+
+            if (response.ok) {
+                return {
+                    success: true,
+                    data: data,
+                    message: data.message || 'Success'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: data.message || `HTTP Error: ${response.status}`,
+                    error: data.error || 'Unknown error'
+                };
             }
-            
-            return result;
         } catch (error) {
-            console.error('勤怠履歴取得エラー:', error);
-            throw error;
+            console.error('API call error:', error);
+            return {
+                success: false,
+                message: 'ネットワークエラーが発生しました',
+                error: error.message
+            };
         }
     }
-    
+
     /**
-     * 当日の勤務状況取得
+     * 出勤打刻（POST /api/attendance/clock-in）
+     * @returns {Promise<Object>} 打刻結果
      */
-    async getTodayStatus(employeeId) {
-        try {
-            const response = await fetch(`${this.baseUrl}/attendance/today-status?employeeId=${employeeId}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '勤務状況の取得に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('勤務状況取得エラー:', error);
-            throw error;
-        }
+    async clockIn() {
+        return await this.apiCall('/attendance/clock-in', {
+            method: 'POST'
+        });
     }
-    
+
     /**
-     * 月末申請
+     * 退勤打刻（POST /api/attendance/clock-out）
+     * @returns {Promise<Object>} 打刻結果
      */
-    async submitMonthlyAttendance(employeeId, targetMonth) {
+    async clockOut() {
+        return await this.apiCall('/attendance/clock-out', {
+            method: 'POST'
+        });
+    }
+
+    /**
+     * 今日の勤怠情報取得（GET /api/attendance/today）
+     * @returns {Promise<Object>} 勤怠情報
+     */
+    async getTodayAttendance() {
+        return await this.apiCall('/attendance/today', {
+            method: 'GET'
+        });
+    }
+
+    /**
+     * 勤怠履歴取得（GET /api/attendance/history）
+     * @param {string} yearMonth - 年月（YYYY-MM形式）
+     * @returns {Promise<Object>} 勤怠履歴
+     */
+    async getAttendanceHistory(yearMonth) {
+        return await this.apiCall(`/attendance/history?yearMonth=${yearMonth}`, {
+            method: 'GET'
+        });
+    }
+
+    /**
+     * 勤怠修正申請（POST /api/requests/adjustment）
+     * @param {Object} requestData - 申請データ
+     * @returns {Promise<Object>} 申請結果
+     */
+    async submitAdjustmentRequest(requestData) {
+        return await this.apiCall('/requests/adjustment', {
+            method: 'POST',
+            body: JSON.stringify(requestData)
+        });
+    }
+
+    /**
+     * 休暇申請（POST /api/requests/leave）
+     * @param {Object} requestData - 申請データ
+     * @returns {Promise<Object>} 申請結果
+     */
+    async submitLeaveRequest(requestData) {
+        return await this.apiCall('/requests/leave', {
+            method: 'POST',
+            body: JSON.stringify(requestData)
+        });
+    }
+
+    /**
+     * PDFレポート生成（POST /reports/pdf）
+     * @param {string} yearMonth - 年月（YYYY-MM形式）
+     * @returns {Promise<Object>} レポート生成結果
+     */
+    async generateReport(yearMonth) {
         try {
-            const response = await fetch(`${this.baseUrl}/attendance/monthly-submit`, {
+            const user = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEYS.USER_INFO));
+            const response = await fetch(`${this.pdfUrl}/pdf`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                credentials: 'include',
                 body: JSON.stringify({
-                    employeeId,
-                    targetMonth
+                    employee_id: user.employeeId,
+                    year_month: yearMonth,
+                    report_type: 'monthly'
                 })
             });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '月末申請に失敗しました');
+
+            const data = await response.json();
+
+            if (response.ok) {
+                return {
+                    success: true,
+                    data: data,
+                    message: data.message || 'Success'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: data.message || `HTTP Error: ${response.status}`,
+                    error: data.error || 'Unknown error'
+                };
             }
-            
-            return result;
         } catch (error) {
-            console.error('月末申請エラー:', error);
-            throw error;
+            console.error('Generate report error:', error);
+            return {
+                success: false,
+                message: 'レポート生成に失敗しました',
+                error: error.message
+            };
         }
     }
 }
 
 // グローバルに公開
-window.AttendanceService = AttendanceService;response.ok) {
-                throw new Error(result.message || '出勤打刻に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('出勤打刻エラー:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * 退勤打刻
-     */
-    async clockOut(employeeId) {
-        try {
-            const response = await fetch(`${this.baseUrl}/attendance/clock-out`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ employeeId })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '退勤打刻に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('退勤打刻エラー:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * 勤怠履歴取得
-     */
-    async getAttendanceHistory(params = {}) {
-        try {
-            const queryParams = new URLSearchParams();
-            
-            if (params.employeeId) {
-                queryParams.append('employeeId', params.employeeId);
-            }
-            if (params.yearMonth) {
-                queryParams.append('yearMonth', params.yearMonth);
-            }
-            if (params.dateFrom) {
-                queryParams.append('dateFrom', params.dateFrom);
-            }
-            if (params.dateTo) {
-                queryParams.append('dateTo', params.dateTo);
-            }
-            
-            const response = await fetch(`${this.baseUrl}/attendance/history?${queryParams}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            
-            const result = await response.json();
-            
-            if (!
+window.AttendanceService = AttendanceService;

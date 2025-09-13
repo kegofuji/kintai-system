@@ -1,27 +1,38 @@
 package com.kintai.dto;
 
+import lombok.Builder;
+import lombok.Data;
+
+/**
+ * ログインレスポンスDTO
+ * ログイン結果のレスポンスデータ
+ */
+@Data
+@Builder
 public class LoginResponse {
+
+    /**
+     * ログイン成功フラグ
+     */
+    private boolean success;
+
+    /**
+     * 社員ID
+     */
     private Long employeeId;
+
+    /**
+     * 社員名
+     */
     private String employeeName;
+
+    /**
+     * ロール
+     */
     private String role;
+
+    /**
+     * セッショントークン
+     */
     private String sessionToken;
-
-    public LoginResponse(Long employeeId, String employeeName, String role, String sessionToken) {
-        this.employeeId = employeeId;
-        this.employeeName = employeeName;
-        this.role = role;
-        this.sessionToken = sessionToken;
-    }
-
-    public Long getEmployeeId() { return employeeId; }
-    public String getEmployeeName() { return employeeName; }
-    public String getRole() { return role; }
-    public String getSessionToken() { return sessionToken; }
 }
-
-
-
-
-
-
-

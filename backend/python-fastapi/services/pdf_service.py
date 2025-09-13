@@ -1,331 +1,240 @@
-"""
-PDF生成サービス
-勤怠レポートPDF生成専用サービス
-"""
-
-import os
-import logging
-from datetime import datetime
-from typing import Optional, Dict, Any
-from jinja2 import Template
 import requests
+import os
+import uuid
+from datetime import datetime, timedelta
+from jinja2 import Environment, FileSystemLoader
+from weasyprint import HTML, CSS
+from typing import Optional
 import asyncio
-import aiofiles
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import json
+import logging
 
 logger = logging.getLogger(__name__)
 
 class PDFReportService:
-    """PDF生成サービス"""
     
     def __init__(self):
-        self.spring_boot_url = os.getenv("SPRING_BOOT_URL", "http://localhost:8080")
-        self.output_dir = "generated_pdfs"
-        self._setup_fonts()
+        self.spring_boot_base_url = os.getenv("SPRING_BOOT_URL", "http://localhost:8080")
+        self.pdf_storage_path = "static/reports"
+        self.template_env = Environment(loader=FileSystemLoader("templates"))
+        
+        # PDFディレクトリ作成
+        os.makedirs(self.pdf_storage_path, exist_ok=True)
     
-    def _setup_fonts(self):
-        """日本語フォントセットアップ"""
-        try:
-            # 日本語フォント登録（システムにある場合）
-            font_paths = [
-                "/System/Library/Fonts/Hiragino Sans GB.ttc",  # macOS
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-                "C:\\Windows\\Fonts\\msgothic.ttc",  # Windows
-            ]
-            
-            for font_path in font_paths:
-                if os.path.exists(font_path):
-                    try:
-                        pdfmetrics.registerFont(TTFont('Japanese', font_path))
-                        logger.info(f"日本語フォント登録成功: {font_path}")
-                        return
-                    except Exception:
-                        continue
-            
-            logger.warning("日本語フォントが見つかりません。デフォルトフォントを使用します。")
-            
-        except Exception as e:
-            logger.error(f"フォントセットアップエラー: {str(e)}")
-    
-    async def generate_monthly_report(self, employee_id: int, year_month: str) -> Optional[str]:
+    async def generate_monthly_report(self, employee_id: int, year_month: str) -> dict:
         """
-        月次勤怠レポート生成
+        月次PDFレポート生成（設計書の連携フロー準拠）
+        1. Spring Boot APIから勤怠データ取得
+        2. HTMLテンプレートにデータ挿入  
+        3. WeasyPrintでPDF変換
+        4. 一時ファイル保存（24時間後削除）
         """
         try:
-            # Spring Bootから勤怠データ取得
+            # 1. Spring Boot APIから勤怠データ取得
             attendance_data = await self._fetch_attendance_data(employee_id, year_month)
             
-            if not attendance_data:
-                logger.error("勤怠データの取得に失敗しました")
-                return None
+            # 2. HTMLテンプレートレンダリング
+            html_content = self._render_template(attendance_data)
             
-            # PDFファイル名生成
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"attendance_report_{employee_id}_{year_month.replace('-', '')}_{timestamp}.pdf"
-            file_path = os.path.join(self.output_dir, filename)
+            # 3. PDF生成
+            pdf_filename = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.pdf"
+            pdf_path = os.path.join(self.pdf_storage_path, pdf_filename)
             
-            # PDF生成
-            success = await self._create_pdf_report(file_path, attendance_data, year_month)
+            HTML(string=html_content).write_pdf(
+                pdf_path,
+                stylesheets=[CSS(string=self._get_pdf_css())]
+            )
             
-            if success:
-                logger.info(f"PDFレポート生成完了: {filename}")
-                return filename
-            else:
-                logger.error("PDFレポート生成に失敗しました")
-                return None
-                
+            # 4. 24時間後削除スケジュール設定
+            asyncio.create_task(self._schedule_file_deletion(pdf_path, hours=24))
+            
+            # 5. レスポンス生成
+            expires = datetime.now() + timedelta(hours=24)
+            
+            return {
+                "success": True,
+                "report_url": f"http://localhost:8081/reports/download/{pdf_filename}",
+                "expires": expires.isoformat()
+            }
+            
         except Exception as e:
-            logger.error(f"月次レポート生成エラー: {str(e)}")
-            return None
+            logger.error(f"PDF生成エラー: {str(e)}")
+            raise Exception(f"PDF生成に失敗しました: {str(e)}")
     
-    async def _fetch_attendance_data(self, employee_id: int, year_month: str) -> Optional[Dict[Any, Any]]:
-        """
-        Spring Bootから勤怠データ取得
-        """
+    async def _fetch_attendance_data(self, employee_id: int, year_month: str) -> dict:
+        """Spring Boot APIから勤怠データ取得"""
+        url = f"{self.spring_boot_base_url}/api/attendance/history"
+        params = {
+            "employeeId": employee_id,
+            "yearMonth": year_month
+        }
+        
         try:
-            url = f"{self.spring_boot_url}/api/attendance/history"
-            params = {
-                "employeeId": employee_id,
-                "yearMonth": year_month
-            }
-            
-            # 非同期HTTP要求
             response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    return data.get("data")
-                else:
-                    logger.error(f"勤怠データ取得失敗: {data.get('message')}")
-                    return None
-            else:
-                logger.error(f"HTTP エラー: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"勤怠データ取得エラー: {str(e)}")
-            # 開発・テスト用のモックデータ
-            return self._get_mock_data(employee_id, year_month)
+            api_response = response.json()
+            if not api_response.get("success", False):
+                raise Exception(f"Spring Boot APIエラー: {api_response.get('message', 'Unknown error')}")
+            
+            return api_response["data"]
+            
+        except requests.RequestException as e:
+            logger.error(f"Spring Boot API呼び出しエラー: {str(e)}")
+            raise Exception(f"勤怠データの取得に失敗しました: {str(e)}")
     
-    def _get_mock_data(self, employee_id: int, year_month: str) -> Dict[Any, Any]:
-        """
-        開発・テスト用モックデータ（設計書通りの構造）
-        """
-        return {
-            "employee": {
-                "employeeId": employee_id,
-                "employeeName": "山田太郎",
-                "employeeCode": f"E{employee_id:03d}"
-            },
-            "period": {
-                "from": f"{year_month}-01",
-                "to": f"{year_month}-31"
-            },
-            "attendanceList": [
-                {
-                    "attendanceDate": f"{year_month}-01",
-                    "clockInTime": "09:05:00",
-                    "clockOutTime": "18:10:00",
-                    "lateMinutes": 5,
-                    "earlyLeaveMinutes": 0,
-                    "overtimeMinutes": 10,
-                    "nightShiftMinutes": 0,
-                    "attendanceStatus": "normal",
-                    "submissionStatus": "承認済",
-                    "attendanceFixedFlag": True
-                },
-                {
-                    "attendanceDate": f"{year_month}-02",
-                    "clockInTime": "09:00:00",
-                    "clockOutTime": "18:00:00",
-                    "lateMinutes": 0,
-                    "earlyLeaveMinutes": 0,
-                    "overtimeMinutes": 0,
-                    "nightShiftMinutes": 0,
-                    "attendanceStatus": "normal",
-                    "submissionStatus": "承認済",
-                    "attendanceFixedFlag": True
-                }
-            ],
-            "summary": {
-                "totalWorkingMinutes": 960,
-                "totalOvertimeMinutes": 10,
-                "totalNightShiftMinutes": 0,
-                "totalLateMinutes": 5,
-                "totalEarlyLeaveMinutes": 0,
-                "paidLeaveDays": 1,
-                "absentDays": 0
+    def _render_template(self, data: dict) -> str:
+        """HTMLテンプレートレンダリング"""
+        template = self.template_env.get_template("report_template.html")
+        
+        # 時間表示フォーマット変換（分 → HH:MM）
+        formatted_data = self._format_attendance_data(data)
+        
+        return template.render(
+            employee=formatted_data["employee"],
+            period=formatted_data["period"],
+            attendance_list=formatted_data["attendanceList"],
+            summary=formatted_data["summary"],
+            generated_at=datetime.now().strftime("%Y年%m月%d日 %H:%M")
+        )
+    
+    def _format_attendance_data(self, data: dict) -> dict:
+        """勤怠データフォーマット（分→時分変換）"""
+        formatted_list = []
+        
+        for record in data["attendanceList"]:
+            formatted_record = record.copy()
+            
+            # 分を HH:MM 形式に変換
+            formatted_record["late_time_formatted"] = self._minutes_to_hhmm(record["lateMinutes"])
+            formatted_record["early_leave_time_formatted"] = self._minutes_to_hhmm(record["earlyLeaveMinutes"])
+            formatted_record["overtime_time_formatted"] = self._minutes_to_hhmm(record["overtimeMinutes"])
+            formatted_record["night_shift_time_formatted"] = self._minutes_to_hhmm(record["nightShiftMinutes"])
+            
+            # ステータス日本語化
+            status_map = {
+                "normal": "出勤",
+                "paid_leave": "有給",
+                "absent": "欠勤"
             }
+            formatted_record["attendance_status_jp"] = status_map.get(record["attendanceStatus"], record["attendanceStatus"])
+            
+            submission_map = {
+                "未提出": "未提出",
+                "申請済": "申請済",
+                "承認": "確定済",
+                "却下": "却下"
+            }
+            formatted_record["submission_status_jp"] = submission_map.get(record["submissionStatus"], record["submissionStatus"])
+            
+            formatted_list.append(formatted_record)
+        
+        # 集計データフォーマット
+        summary = data["summary"].copy()
+        summary["total_working_formatted"] = self._minutes_to_hhmm(summary["totalWorkingMinutes"])
+        summary["total_overtime_formatted"] = self._minutes_to_hhmm(summary["totalOvertimeMinutes"])
+        summary["total_night_shift_formatted"] = self._minutes_to_hhmm(summary["totalNightShiftMinutes"])
+        summary["total_late_formatted"] = self._minutes_to_hhmm(summary["totalLateMinutes"])
+        summary["total_early_leave_formatted"] = self._minutes_to_hhmm(summary["totalEarlyLeaveMinutes"])
+        
+        # 期間データのフォーマット（from/to形式）
+        period_data = {
+            "from": data["period"]["from"],
+            "to": data["period"]["to"]
+        }
+        
+        return {
+            "employee": data["employee"],
+            "period": period_data,
+            "attendanceList": formatted_list,
+            "summary": summary
         }
     
-    async def _create_pdf_report(self, file_path: str, data: Dict[Any, Any], year_month: str) -> bool:
-        """
-        PDF勤怠レポート作成（出力項目）
-        """
-        try:
-            # ドキュメント作成
-            doc = SimpleDocTemplate(
-                file_path,
-                pagesize=A4,
-                rightMargin=20*mm,
-                leftMargin=20*mm,
-                topMargin=20*mm,
-                bottomMargin=20*mm
-            )
-            
-            # スタイル設定
-            styles = getSampleStyleSheet()
-            
-            # 日本語対応スタイル
-            japanese_style = ParagraphStyle(
-                'Japanese',
-                parent=styles['Normal'],
-                fontName='Japanese' if 'Japanese' in pdfmetrics.getRegisteredFontNames() else 'Helvetica',
-                fontSize=10,
-                leading=12
-            )
-            
-            title_style = ParagraphStyle(
-                'JapaneseTitle',
-                parent=japanese_style,
-                fontSize=16,
-                leading=20,
-                alignment=1  # センタリング
-            )
-            
-            # レポート要素リスト
-            elements = []
-            
-            # タイトル
-            elements.append(Paragraph("勤怠管理システム 月次レポート", title_style))
-            elements.append(Spacer(1, 20))
-            
-            # 基本情報
-            employee = data.get("employee", {})
-            period = data.get("period", {})
-            
-            info_data = [
-                ["対象年月", year_month],
-                ["社員名", employee.get("employeeName", "")],
-                ["社員コード", employee.get("employeeCode", "")],
-                ["期間", f"{period.get('from', '')} ～ {period.get('to', '')}"],
-                ["出力日時", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
-            ]
-            
-            info_table = Table(info_data, colWidths=[40*mm, 80*mm])
-            info_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-                ('BACKGROUND', (1, 0), (1, -1), colors.white),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            
-            elements.append(info_table)
-            elements.append(Spacer(1, 20))
-            
-            # 日次明細テーブル
-            elements.append(Paragraph("日次勤怠明細", japanese_style))
-            elements.append(Spacer(1, 10))
-            
-            # テーブルヘッダー（項目）
-            attendance_data = [
-                ["日付", "出勤", "退勤", "遅刻", "早退", "残業", "深夜", "ステータス"]
-            ]
-            
-            # 勤怠データ追加
-            attendance_list = data.get("attendanceList", [])
-            for record in attendance_list:
-                row = [
-                    record.get("attendanceDate", ""),
-                    record.get("clockInTime", ""),
-                    record.get("clockOutTime", ""),
-                    self._format_minutes_to_hhmm(record.get("lateMinutes", 0)),
-                    self._format_minutes_to_hhmm(record.get("earlyLeaveMinutes", 0)),
-                    self._format_minutes_to_hhmm(record.get("overtimeMinutes", 0)),
-                    self._format_minutes_to_hhmm(record.get("nightShiftMinutes", 0)),
-                    "確定" if record.get("attendanceFixedFlag") else record.get("submissionStatus", "")
-                ]
-                attendance_data.append(row)
-            
-            attendance_table = Table(attendance_data, colWidths=[
-                25*mm, 20*mm, 20*mm, 15*mm, 15*mm, 15*mm, 15*mm, 25*mm
-            ])
-            
-            attendance_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 0), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            
-            elements.append(attendance_table)
-            elements.append(Spacer(1, 20))
-            
-            # 集計情報（集計項目）
-            elements.append(Paragraph("月次集計", japanese_style))
-            elements.append(Spacer(1, 10))
-            
-            summary = data.get("summary", {})
-            summary_data = [
-                ["実働合計", self._format_minutes_to_hhmm(summary.get("totalWorkingMinutes", 0))],
-                ["残業合計", self._format_minutes_to_hhmm(summary.get("totalOvertimeMinutes", 0))],
-                ["深夜合計", self._format_minutes_to_hhmm(summary.get("totalNightShiftMinutes", 0))],
-                ["遅刻回数/時間", f"{self._count_late_days(attendance_list)}回 / {self._format_minutes_to_hhmm(summary.get('totalLateMinutes', 0))}"],
-                ["早退回数/時間", f"{self._count_early_leave_days(attendance_list)}回 / {self._format_minutes_to_hhmm(summary.get('totalEarlyLeaveMinutes', 0))}"],
-                ["有給取得日数", f"{summary.get('paidLeaveDays', 0)}日"],
-                ["欠勤日数", f"{summary.get('absentDays', 0)}日"]
-            ]
-            
-            summary_table = Table(summary_data, colWidths=[50*mm, 50*mm])
-            summary_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-                ('BACKGROUND', (1, 0), (1, -1), colors.white),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            
-            elements.append(summary_table)
-            
-            # PDF生成
-            doc.build(elements)
-            return True
-            
-        except Exception as e:
-            logger.error(f"PDF作成エラー: {str(e)}")
-            return False
-    
-    def _format_minutes_to_hhmm(self, minutes: int) -> str:
-        """分を時間:分の文字列に変換（設計書通りのhh:mm表示）"""
-        if not minutes:
+    def _minutes_to_hhmm(self, minutes: int) -> str:
+        """分をHH:MM形式に変換"""
+        if minutes == 0:
             return "00:00"
         hours = minutes // 60
         mins = minutes % 60
         return f"{hours:02d}:{mins:02d}"
     
-    def _count_late_days(self, attendance_list: list) -> int:
-        """遅刻日数カウント"""
-        return len([r for r in attendance_list if r.get("lateMinutes", 0) > 0])
+    def _get_pdf_css(self) -> str:
+        """PDF用CSSスタイル"""
+        return """
+        @page {
+            margin: 20mm;
+            size: A4;
+        }
+        
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .info-section {
+            margin-bottom: 15px;
+        }
+        
+        .info-section .label {
+            font-weight: bold;
+            display: inline-block;
+            width: 80px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 10px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 5px;
+            text-align: center;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        .summary-table {
+            margin-top: 20px;
+        }
+        
+        .summary-table th {
+            background-color: #e8f4f8;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: right;
+            font-size: 10px;
+            color: #666;
+        }
+        """
     
-    def _count_early_leave_days(self, attendance_list: list) -> int:
-        """早退日数カウント"""
-        return len([r for r in attendance_list if r.get("earlyLeaveMinutes", 0) > 0])
+    async def _schedule_file_deletion(self, file_path: str, hours: int):
+        """指定時間後にファイル削除"""
+        await asyncio.sleep(hours * 3600)  # hours時間待機
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"期限切れPDFファイルを削除しました: {file_path}")
+        except Exception as e:
+            logger.error(f"PDFファイル削除エラー: {str(e)}")

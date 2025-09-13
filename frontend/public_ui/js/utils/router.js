@@ -1,149 +1,133 @@
-/**
- * SPAルーター（Vanilla JS）
- */
-
+// SPA用ルーター（設計書の画面遷移図完全対応）
 class Router {
     constructor() {
         this.routes = new Map();
         this.currentRoute = null;
-        this.setupRoutes();
+        this.appContainer = document.getElementById('app');
         this.init();
     }
-    
-    setupRoutes() {
-        // 社員用ルート
-        this.routes.set('attendance-history', {
-            component: 'AttendanceComponent',
-            method: 'loadHistory',
-            title: '勤怠履歴'
-        });
-        
-        this.routes.set('leave-request', {
-            component: 'LeaveRequestComponent',
-            method: 'loadLeaveRequest',
-            title: '有給申請'
-        });
-        
-        this.routes.set('adjustment-request', {
-            component: 'AttendanceComponent',
-            method: 'loadAdjustmentRequest',
-            title: '打刻修正申請'
-        });
-        
-        // 管理者用ルート
-        this.routes.set('employee-management', {
-            component: 'AdminComponent',
-            method: 'loadEmployeeManagement',
-            title: '社員管理',
-            adminOnly: true
-        });
-        
-        this.routes.set('attendance-management', {
-            component: 'AdminComponent',
-            method: 'loadAttendanceManagement',
-            title: '勤怠管理',
-            adminOnly: true
-        });
-        
-        this.routes.set('request-approval', {
-            component: 'AdminComponent',
-            method: 'loadRequestApproval',
-            title: '申請承認',
-            adminOnly: true
-        });
-        
-        this.routes.set('leave-management', {
-            component: 'AdminComponent',
-            method: 'loadLeaveManagement',
-            title: '有給管理',
-            adminOnly: true
-        });
-        
-        this.routes.set('report-generation', {
-            component: 'AdminComponent',
-            method: 'loadReportGeneration',
-            title: 'レポート出力',
-            adminOnly: true
-        });
-    }
-    
+
+    /**
+     * ルーター初期化
+     */
     init() {
-        window.addEventListener('popstate', () => this.handleRouteChange());
+        // ハッシュ変更イベントを監視
+        window.addEventListener('hashchange', () => this.handleRoute());
+        
+        // 初期ルートを処理
+        this.handleRoute();
     }
-    
-    navigate(route) {
-        if (!this.routes.has(route)) {
-            console.warn(`Route not found: ${route}`);
-            return;
-        }
-        
-        const routeConfig = this.routes.get(route);
-        
-        // 管理者専用ルートの権限チェック
-        if (routeConfig.adminOnly && window.app?.currentUser?.role !== 'admin') {
-            window.app?.showMessage('管理者権限が必要です', 'error');
-            return;
-        }
-        
-        this.currentRoute = route;
-        this.loadRoute(routeConfig);
-        
-        // ナビゲーション状態更新
-        this.updateNavigation(route);
+
+    /**
+     * ルート登録
+     * @param {string} path - パス
+     * @param {Function} handler - ハンドラー関数
+     */
+    addRoute(path, handler) {
+        this.routes.set(path, handler);
     }
-    
-    async loadRoute(routeConfig) {
-        try {
-            const componentName = routeConfig.component;
-            const methodName = routeConfig.method;
-            
-            // コンテンツエリア取得
-            const contentArea = document.getElementById('dynamic-content') || 
-                               document.getElementById('admin-content');
-            
-            if (!contentArea) {
-                console.error('Content area not found');
-                return;
+
+    /**
+     * ルート遷移
+     * @param {string} path - 遷移先パス
+     */
+    navigate(path) {
+        window.location.hash = '#' + path;
+        this.handleRoute();
+    }
+
+    /**
+     * ルート処理
+     */
+    handleRoute() {
+        const hash = window.location.hash.slice(1) || '/login';
+        const handler = this.routes.get(hash);
+        
+        if (handler) {
+            this.currentRoute = hash;
+            try {
+                handler();
+            } catch (error) {
+                console.error('Route handler error:', error);
+                this.showError('画面の表示に失敗しました');
             }
+        } else {
+            // 404の場合はログイン画面に遷移
+            this.navigate('/login');
+        }
+    }
+
+    /**
+     * 認証状態チェック
+     * @returns {boolean} 認証済みかどうか
+     */
+    isAuthenticated() {
+        return !!localStorage.getItem(CONFIG.STORAGE_KEYS.AUTH_TOKEN);
+    }
+
+    /**
+     * ユーザー情報取得
+     * @returns {Object|null} ユーザー情報
+     */
+    getUserInfo() {
+        const userInfo = localStorage.getItem(CONFIG.STORAGE_KEYS.USER_INFO);
+        return userInfo ? JSON.parse(userInfo) : null;
+    }
+
+    /**
+     * メッセージ表示
+     * @param {string} message - メッセージ
+     * @param {string} type - メッセージタイプ
+     */
+    showMessage(message, type = 'info') {
+        const container = document.getElementById('message-container');
+        if (container) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `${type}-message`;
+            messageDiv.textContent = message;
             
-            // コンポーネントのインスタンス化と実行
-            if (window[componentName]) {
-                const component = new window[componentName](contentArea);
-                if (component[methodName]) {
-                    await component[methodName]();
+            container.appendChild(messageDiv);
+            
+            // 5秒後に自動削除
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
                 }
-            } else {
-                console.error(`Component not found: ${componentName}`);
-            }
-            
-        } catch (error) {
-            console.error('Route loading error:', error);
-            if (window.app) {
-                window.app.showMessage('ページの読み込みに失敗しました', 'error');
-            }
+            }, 5000);
         }
     }
-    
-    updateNavigation(activeRoute) {
-        // ナビゲーションメニューのアクティブ状態更新
-        document.querySelectorAll('[data-nav]').forEach(link => {
-            if (link.dataset.nav === activeRoute) {
-                link.classList.add('active');
-            } else {
-                link.classList.remove('active');
-            }
-        });
+
+    /**
+     * エラー表示
+     * @param {string} message - エラーメッセージ
+     */
+    showError(message) {
+        this.showMessage(message, 'error');
     }
-    
-    handleRouteChange() {
-        // ブラウザバック/フォワード対応
-        const path = window.location.pathname;
-        const route = path.substring(1); // 先頭の / を除去
-        
-        if (this.routes.has(route)) {
-            this.navigate(route);
+
+    /**
+     * ローディング表示
+     */
+    showLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.remove('d-none');
+        }
+    }
+
+    /**
+     * ローディング非表示
+     */
+    hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.classList.add('d-none');
         }
     }
 }
 
-window.Router = Router;
+// グローバルルーターインスタンス
+const router = new Router();
+
+// グローバルに公開
+window.router = router;

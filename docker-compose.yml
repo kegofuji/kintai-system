@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # MySQL データベース
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: kintai_system
+      MYSQL_USER: kintai_user
+      MYSQL_PASSWORD: kintai_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docs/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - kintai_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Spring Boot バックエンド
+  backend-java:
+    build: 
+      context: ./backend/java-springboot
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/kintai_system
+      - SPRING_DATASOURCE_USERNAME=kintai_user
+      - SPRING_DATASOURCE_PASSWORD=kintai_password
+      - JWT_SECRET=your-secret-key-here-make-it-long-and-secure
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kintai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # FastAPI バックエンド
+  backend-python:
+    build:
+      context: ./backend/python-fastapi
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_BOOT_URL=http://backend-java:8080
+    depends_on:
+      backend-java:
+        condition: service_healthy
+    networks:
+      - kintai_network
+    volumes:
+      - pdf_storage:/app/static/reports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # フロントエンド
+  frontend:
+    build:
+      context: ./frontend/public_ui
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      - kintai_network
+    depends_on:
+      - backend-java
+      - backend-python
+
+volumes:
+  mysql_data:
+  pdf_storage:
+
+networks:
+  kintai_network:
+    driver: bridge

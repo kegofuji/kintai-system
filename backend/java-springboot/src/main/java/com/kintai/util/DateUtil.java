@@ -1,134 +1,122 @@
 package com.kintai.util;
 
+import org.springframework.stereotype.Component;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 日付ユーティリティ
+ * 日付・時刻関連の共通処理
+ */
+@Component
 public class DateUtil {
     
-    private static final DateTimeFormatter YEAR_MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    /**
+     * 現在日時取得（Asia/Tokyoタイムゾーン）
+     * @return 現在日時
+     */
+    public static LocalDateTime getCurrentDateTime() {
+        return LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
+    }
     
     /**
-     * 営業日一覧を取得（土日祝日除外）
-     * ※祝日は簡略化のため未実装
+     * 現在日付取得
+     * @return 現在日付
+     */
+    public static LocalDate getCurrentDate() {
+        return LocalDate.now(ZoneId.of("Asia/Tokyo"));
+    }
+    
+    /**
+     * 分をHH:MM形式に変換
+     * @param minutes 分
+     * @return HH:MM形式の文字列
+     */
+    public static String formatTimeToHHMM(int minutes) {
+        int hours = minutes / 60;
+        int mins = minutes % 60;
+        return String.format("%02d:%02d", hours, mins);
+    }
+    
+    /**
+     * 営業日取得（土日祝除外）
+     * @param yearMonth 年月（YYYY-MM形式）
+     * @return 営業日一覧
      */
     public static List<LocalDate> getWorkingDays(String yearMonth) {
-        YearMonth ym = YearMonth.parse(yearMonth, YEAR_MONTH_FORMATTER);
+        YearMonth ym = YearMonth.parse(yearMonth);
         List<LocalDate> workingDays = new ArrayList<>();
         
-        LocalDate start = ym.atDay(1);
-        LocalDate end = ym.atEndOfMonth();
-        
-        LocalDate current = start;
-        while (!current.isAfter(end)) {
-            DayOfWeek dayOfWeek = current.getDayOfWeek();
-            if (dayOfWeek != DayOfWeek.SATURDAY && dayOfWeek != DayOfWeek.SUNDAY) {
-                workingDays.add(current);
+        for (int day = 1; day <= ym.lengthOfMonth(); day++) {
+            LocalDate date = ym.atDay(day);
+            // 土日を除外（祝日判定は省略）
+            if (!date.getDayOfWeek().equals(DayOfWeek.SATURDAY) && 
+                !date.getDayOfWeek().equals(DayOfWeek.SUNDAY)) {
+                workingDays.add(date);
             }
-            current = current.plusDays(1);
         }
-        
         return workingDays;
     }
     
     /**
-     * 営業日一覧を取得（期間指定）
+     * 日付をYYYY-MM-DD形式に変換
+     * @param date 日付
+     * @return YYYY-MM-DD形式の文字列
      */
-    public static List<LocalDate> getWorkingDaysBetween(LocalDate start, LocalDate end) {
-        List<LocalDate> workingDays = new ArrayList<>();
-        
-        LocalDate current = start;
-        while (!current.isAfter(end)) {
-            DayOfWeek dayOfWeek = current.getDayOfWeek();
-            if (dayOfWeek != DayOfWeek.SATURDAY && dayOfWeek != DayOfWeek.SUNDAY) {
-                workingDays.add(current);
-            }
-            current = current.plusDays(1);
-        }
-        
-        return workingDays;
+    public static String formatDateToString(LocalDate date) {
+        return date.toString();
     }
     
     /**
-     * 年月文字列をLocalDateの範囲に変換
+     * 日時をYYYY-MM-DD HH:MM:SS形式に変換
+     * @param dateTime 日時
+     * @return YYYY-MM-DD HH:MM:SS形式の文字列
      */
-    public static LocalDate[] getMonthRange(String yearMonth) {
-        YearMonth ym = YearMonth.parse(yearMonth, YEAR_MONTH_FORMATTER);
-        return new LocalDate[]{ym.atDay(1), ym.atEndOfMonth()};
+    public static String formatDateTimeToString(LocalDateTime dateTime) {
+        return dateTime.toString().replace("T", " ");
     }
     
     /**
-     * 営業日かどうかを判定
+     * 時刻をHH:MM:SS形式に変換
+     * @param dateTime 日時
+     * @return HH:MM:SS形式の文字列
+     */
+    public static String formatTimeToString(LocalDateTime dateTime) {
+        return dateTime.toLocalTime().toString();
+    }
+    
+    /**
+     * 年月文字列をYearMonthに変換
+     * @param yearMonth 年月（YYYY-MM形式）
+     * @return YearMonth
+     */
+    public static YearMonth parseYearMonth(String yearMonth) {
+        return YearMonth.parse(yearMonth);
+    }
+    
+    /**
+     * 日付が営業日かどうか判定
+     * @param date 日付
+     * @return 営業日の場合true
      */
     public static boolean isWorkingDay(LocalDate date) {
         DayOfWeek dayOfWeek = date.getDayOfWeek();
-        return dayOfWeek != DayOfWeek.SATURDAY && dayOfWeek != DayOfWeek.SUNDAY;
+        return !dayOfWeek.equals(DayOfWeek.SATURDAY) && 
+               !dayOfWeek.equals(DayOfWeek.SUNDAY);
     }
     
     /**
-     * 日付文字列をLocalDateに変換
+     * 指定月の営業日数を取得
+     * @param yearMonth 年月（YYYY-MM形式）
+     * @return 営業日数
      */
-    public static LocalDate parseDate(String dateString) {
-        return LocalDate.parse(dateString, DATE_FORMATTER);
-    }
-    
-    /**
-     * LocalDateを文字列に変換
-     */
-    public static String formatDate(LocalDate date) {
-        return date.format(DATE_FORMATTER);
-    }
-    
-    /**
-     * 年月を文字列に変換
-     */
-    public static String formatYearMonth(LocalDate date) {
-        return date.format(YEAR_MONTH_FORMATTER);
-    }
-    
-    /**
-     * 現在日付が指定された年月に含まれるかチェック
-     */
-    public static boolean isCurrentMonth(String yearMonth) {
-        LocalDate today = LocalDate.now();
-        String currentYearMonth = formatYearMonth(today);
-        return currentYearMonth.equals(yearMonth);
-    }
-
-    public static YearMonth parseYearMonth(String yearMonth) {
-        return YearMonth.parse(yearMonth, YEAR_MONTH_FORMATTER);
-    }
-
-    public static LocalDate getFirstDayOfMonth(YearMonth ym) {
-        return ym.atDay(1);
-    }
-
-    public static LocalDate getLastDayOfMonth(YearMonth ym) {
-        return ym.atEndOfMonth();
-    }
-
-    public static LocalDate todayInJapan() {
-        return LocalDate.now(ZoneId.of("Asia/Tokyo"));
-    }
-
-    /**
-     * 現在日時（日本時間）を返す
-     */
-    public static LocalDateTime nowInJapan() {
-        return LocalDateTime.now(ZoneId.of("Asia/Tokyo"));
-    }
-
-    /**
-     * 指定した年月の営業日一覧を返す（年と月で指定）
-     */
-    public static List<LocalDate> getWorkingDaysInMonth(int year, int month) {
-        YearMonth ym = YearMonth.of(year, month);
-        return getWorkingDays(ym.toString());
+    public static int getWorkingDaysCount(String yearMonth) {
+        return getWorkingDays(yearMonth).size();
     }
 }

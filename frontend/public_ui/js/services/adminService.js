@@ -1,186 +1,172 @@
-/**
- * 管理者サービス（社員管理・レポート出力）
- */
-
+// 管理者サービス（設計書のAPI仕様完全準拠）
 class AdminService {
     constructor() {
-        this.baseUrl = CONFIG.API_BASE_URL;
+        this.baseUrl = CONFIG.getApiBaseUrl();
     }
-    
+
     /**
-     * 社員一覧取得
+     * 共通API呼び出し処理
+     * @param {string} endpoint - エンドポイント
+     * @param {Object} options - オプション
+     * @returns {Promise<Object>} API応答
+     */
+    async apiCall(endpoint, options = {}) {
+        try {
+            const url = `${this.baseUrl}${endpoint}`;
+            const token = localStorage.getItem('kintai_session_token');
+            
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            };
+
+            const response = await fetch(url, {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...options.headers
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                return {
+                    success: true,
+                    data: data,
+                    message: data.message || 'Success'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: data.message || `HTTP Error: ${response.status}`,
+                    error: data.error || 'Unknown error'
+                };
+            }
+        } catch (error) {
+            console.error('API call error:', error);
+            return {
+                success: false,
+                message: 'ネットワークエラーが発生しました',
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * 従業員一覧取得（GET /api/admin/employees）
+     * @param {Object} params - 検索パラメータ
+     * @returns {Promise<Object>} 従業員一覧
      */
     async getEmployees(params = {}) {
-        try {
-            const queryParams = new URLSearchParams();
-            
-            if (params.status) {
-                queryParams.append('status', params.status);
-            }
-            if (params.keyword) {
-                queryParams.append('keyword', params.keyword);
-            }
-            
-            const response = await fetch(`${this.baseUrl}/admin/employees?${queryParams}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '社員一覧の取得に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('社員一覧取得エラー:', error);
-            throw error;
-        }
+        const queryString = new URLSearchParams(params).toString();
+        return await this.apiCall(`/admin/employees?${queryString}`, {
+            method: 'GET'
+        });
     }
-    
+
     /**
-     * 社員追加
+     * 従業員詳細取得（GET /api/admin/employees/{id}）
+     * @param {string} employeeId - 従業員ID
+     * @returns {Promise<Object>} 従業員詳細
      */
-    async addEmployee(employeeData) {
-        try {
-            const response = await fetch(`${this.baseUrl}/admin/employees`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify(employeeData)
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '社員の追加に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('社員追加エラー:', error);
-            throw error;
-        }
+    async getEmployee(employeeId) {
+        return await this.apiCall(`/admin/employees/${employeeId}`, {
+            method: 'GET'
+        });
     }
-    
+
     /**
-     * 社員情報更新
+     * 従業員作成（POST /api/admin/employees）
+     * @param {Object} employeeData - 従業員データ
+     * @returns {Promise<Object>} 作成結果
      */
-    async updateEmployee(employeeId, updateData) {
-        try {
-            const response = await fetch(`${this.baseUrl}/admin/employees/${employeeId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify(updateData)
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '社員情報の更新に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('社員更新エラー:', error);
-            throw error;
-        }
+    async createEmployee(employeeData) {
+        return await this.apiCall('/admin/employees', {
+            method: 'POST',
+            body: JSON.stringify(employeeData)
+        });
     }
-    
+
     /**
-     * 退職処理
+     * 従業員更新（PUT /api/admin/employees/{id}）
+     * @param {string} employeeId - 従業員ID
+     * @param {Object} employeeData - 従業員データ
+     * @returns {Promise<Object>} 更新結果
      */
-    async retireEmployee(employeeId, retiredAt) {
-        try {
-            const response = await fetch(`${this.baseUrl}/admin/employees/${employeeId}/retire`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({ retiredAt })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '退職処理に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('退職処理エラー:', error);
-            throw error;
-        }
+    async updateEmployee(employeeId, employeeData) {
+        return await this.apiCall(`/admin/employees/${employeeId}`, {
+            method: 'PUT',
+            body: JSON.stringify(employeeData)
+        });
     }
-    
+
     /**
-     * 有給日数調整
+     * 従業員削除（DELETE /api/admin/employees/{id}）
+     * @param {string} employeeId - 従業員ID
+     * @returns {Promise<Object>} 削除結果
      */
-    async adjustPaidLeave(employeeId, adjustmentDays, reason) {
-        try {
-            const response = await fetch(`${this.baseUrl}/admin/paid-leave/adjust`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    employeeId,
-                    adjustmentDays,
-                    reason
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '有給日数調整に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('有給調整エラー:', error);
-            throw error;
-        }
+    async deleteEmployee(employeeId) {
+        return await this.apiCall(`/admin/employees/${employeeId}`, {
+            method: 'DELETE'
+        });
     }
-    
+
     /**
-     * PDFレポート生成
+     * 承認待ち申請一覧取得（GET /api/admin/requests/pending）
+     * @param {Object} params - 検索パラメータ
+     * @returns {Promise<Object>} 申請一覧
      */
-    async generateReport(employeeId, yearMonth) {
-        try {
-            const response = await fetch(`${this.baseUrl}/reports/generate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    employeeId,
-                    yearMonth,
-                    reportType: 'monthly'
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || 'レポート生成に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('レポート生成エラー:', error);
-            throw error;
+    async getPendingRequests(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return await this.apiCall(`/admin/requests/pending?${queryString}`, {
+            method: 'GET'
+        });
+    }
+
+    /**
+     * ダッシュボード統計取得（GET /api/admin/dashboard/stats）
+     * @returns {Promise<Object>} 統計データ
+     */
+    async getDashboardStats() {
+        return await this.apiCall('/admin/dashboard/stats', {
+            method: 'GET'
+        });
+    }
+
+    /**
+     * 月次レポート生成（GET /api/admin/reports/monthly）
+     * @param {string} yearMonth - 年月（YYYY-MM形式）
+     * @param {string} employeeId - 従業員ID（オプション）
+     * @returns {Promise<Object>} レポート生成結果
+     */
+    async generateMonthlyReport(yearMonth, employeeId = null) {
+        const params = { yearMonth };
+        if (employeeId) {
+            params.employeeId = employeeId;
         }
+
+        const queryString = new URLSearchParams(params).toString();
+        return await this.apiCall(`/admin/reports/monthly?${queryString}`, {
+            method: 'GET'
+        });
+    }
+
+    /**
+     * 勤怠データ一括更新（POST /api/admin/attendance/bulk-update）
+     * @param {Array} attendanceData - 勤怠データ配列
+     * @returns {Promise<Object>} 更新結果
+     */
+    async bulkUpdateAttendance(attendanceData) {
+        return await this.apiCall('/admin/attendance/bulk-update', {
+            method: 'POST',
+            body: JSON.stringify({ attendanceData })
+        });
     }
 }
 
+// グローバルに公開
 window.AdminService = AdminService;

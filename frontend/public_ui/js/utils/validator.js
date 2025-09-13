@@ -1,328 +1,288 @@
-/**
- * バリデーションユーティリティ（バリデーション要件）
- */
-
+// バリデーション機能（設計書のバリデーション仕様完全準拠）
 class Validator {
     /**
-     * 社員コード検証（3-10文字の半角英数字）
+     * 社員コード検証（設計書：3-10文字半角英数字）
      */
-    static validateEmployeeCode(employeeCode) {
-        if (!employeeCode) return false;
-        return CONFIG.VALIDATION.EMPLOYEE_CODE.PATTERN.test(employeeCode) &&
-               employeeCode.length >= CONFIG.VALIDATION.EMPLOYEE_CODE.MIN_LENGTH &&
-               employeeCode.length <= CONFIG.VALIDATION.EMPLOYEE_CODE.MAX_LENGTH;
+    static validateEmployeeCode(code) {
+        if (!code) {
+            return { valid: false, message: '社員IDは3-10文字の半角英数字で入力してください' };
+        }
+        
+        if (code.length < 3 || code.length > 10) {
+            return { valid: false, message: '社員IDは3-10文字の半角英数字で入力してください' };
+        }
+        
+        if (!/^[a-zA-Z0-9]+$/.test(code)) {
+            return { valid: false, message: '社員IDは3-10文字の半角英数字で入力してください' };
+        }
+        
+        return { valid: true };
     }
     
     /**
-     * パスワード検証（要件）
-     * 8-20文字、英字（大文字・小文字）、数字、記号を各1文字以上含む
+     * パスワード検証（設計書の詳細ルール完全準拠）
+     * - 8-20文字
+     * - 英字（大文字・小文字）、数字、記号を各1文字以上含む
+     * - 連続する同一文字3文字以上禁止
+     * - 社員IDと同一文字列禁止
      */
     static validatePassword(password, employeeCode = '') {
-        if (!password) return { valid: false, message: 'パスワードは必須です' };
-        
-        if (password.length < CONFIG.VALIDATION.PASSWORD.MIN_LENGTH) {
+        if (!password) {
             return { valid: false, message: 'パスワードは8文字以上で入力してください' };
         }
         
-        if (password.length > CONFIG.VALIDATION.PASSWORD.MAX_LENGTH) {
-            return { valid: false, message: 'パスワードは20文字以下で入力してください' };
+        if (password.length < 8 || password.length > 20) {
+            return { valid: false, message: 'パスワードは8-20文字の英数字記号を含めて入力してください' };
         }
         
-        // 英大文字・小文字・数字・記号チェック
-        const hasUpperCase = /[A-Z]/.test(password);
+        // 英字（大文字・小文字）、数字、記号の各1文字以上チェック
         const hasLowerCase = /[a-z]/.test(password);
-        const hasDigit = /[0-9]/.test(password);
-        const hasSymbol = /[^a-zA-Z0-9]/.test(password);
+        const hasUpperCase = /[A-Z]/.test(password);
+        const hasDigit = /\d/.test(password);
+        const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\?]/.test(password);
         
-        if (!hasUpperCase) {
-            return { valid: false, message: 'パスワードに英大文字を含めてください' };
-        }
-        if (!hasLowerCase) {
-            return { valid: false, message: 'パスワードに英小文字を含めてください' };
-        }
-        if (!hasDigit) {
-            return { valid: false, message: 'パスワードに数字を含めてください' };
-        }
-        if (!hasSymbol) {
-            return { valid: false, message: 'パスワードに記号を含めてください' };
+        if (!hasLowerCase || !hasUpperCase || !hasDigit || !hasSpecialChar) {
+            return { valid: false, message: 'パスワードは英字（大文字・小文字）、数字、記号を各1文字以上含めて入力してください' };
         }
         
         // 連続する同一文字3文字以上禁止
-        if (this.hasRepeatingCharacters(password, 3)) {
-            return { valid: false, message: '同一文字を3文字以上連続して使用できません' };
+        for (let i = 0; i < password.length - 2; i++) {
+            if (password.charAt(i) === password.charAt(i + 1) && 
+                password.charAt(i + 1) === password.charAt(i + 2)) {
+                return { valid: false, message: '連続する同一文字3文字以上は使用できません' };
+            }
         }
         
         // 社員IDと同一文字列禁止
-        if (employeeCode && password.includes(employeeCode)) {
-            return { valid: false, message: 'パスワードに社員IDを含めることはできません' };
+        if (employeeCode && password.toLowerCase() === employeeCode.toLowerCase()) {
+            return { valid: false, message: '社員IDと同一のパスワードは使用できません' };
         }
         
-        // よくあるパスワードチェック
-        if (this.isCommonPassword(password)) {
-            return { valid: false, message: '一般的すぎるパスワードは使用できません' };
-        }
-        
-        return { valid: true, message: '' };
-    }
-    
-    /**
-     * 連続する同一文字チェック
-     */
-    static hasRepeatingCharacters(password, maxRepeat) {
-        for (let i = 0; i <= password.length - maxRepeat; i++) {
-            const char = password.charAt(i);
-            let count = 1;
-            
-            for (let j = i + 1; j < password.length && password.charAt(j) === char; j++) {
-                count++;
-                if (count >= maxRepeat) return true;
-            }
-        }
-        return false;
-    }
-    
-    /**
-     * よくあるパスワードチェック
-     */
-    static isCommonPassword(password) {
-        const commonPasswords = [
-            'password', 'Password', 'password1', 'Password1',
-            '12345678', '123456789', 'qwerty', 'Qwerty1',
-            'admin', 'Admin123', 'user', 'User123'
-        ];
-        return commonPasswords.includes(password);
+        return { valid: true };
     }
     
     /**
      * メールアドレス検証
      */
     static validateEmail(email) {
-        if (!email) return { valid: false, message: 'メールアドレスは必須です' };
-        
-        if (!CONFIG.VALIDATION.EMAIL.PATTERN.test(email)) {
+        if (!email) {
             return { valid: false, message: '正しいメールアドレスを入力してください' };
         }
         
-        return { valid: true, message: '' };
+        const emailRegex = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+        if (!emailRegex.test(email)) {
+            return { valid: false, message: '正しいメールアドレスを入力してください' };
+        }
+        
+        if (email.length > 100) {
+            return { valid: false, message: 'メールアドレスは100文字以内で入力してください' };
+        }
+        
+        return { valid: true };
     }
     
     /**
      * 氏名検証
      */
-    static validateName(name) {
-        if (!name || name.trim() === '') {
-            return { valid: false, message: '氏名は必須です' };
+    static validateEmployeeName(name) {
+        if (!name || name.trim().length === 0) {
+            return { valid: false, message: '氏名は50文字以内で入力してください' };
         }
         
-        if (name.length > CONFIG.VALIDATION.NAME.MAX_LENGTH) {
-            return { valid: false, message: `氏名は${CONFIG.VALIDATION.NAME.MAX_LENGTH}文字以内で入力してください` };
+        if (name.length > 50) {
+            return { valid: false, message: '氏名は50文字以内で入力してください' };
         }
         
-        return { valid: true, message: '' };
+        return { valid: true };
     }
     
     /**
-     * 理由・コメント検証
+     * 理由欄検証（設計書：最大200文字）
      */
     static validateReason(reason) {
-        if (!reason || reason.trim() === '') {
-            return { valid: false, message: '理由は必須です' };
+        if (!reason || reason.trim().length === 0) {
+            return { valid: false, message: '理由は200文字以内で入力してください' };
         }
         
-        if (reason.length > CONFIG.VALIDATION.REASON.MAX_LENGTH) {
-            return { valid: false, message: `理由は${CONFIG.VALIDATION.REASON.MAX_LENGTH}文字以内で入力してください` };
+        if (reason.length > 200) {
+            return { valid: false, message: '理由は200文字以内で入力してください' };
         }
         
-        return { valid: true, message: '' };
+        return { valid: true };
     }
     
     /**
-     * 日付検証
+     * 有給申請日検証（設計書：未来日のみ）
      */
-    static validateDate(dateString, options = {}) {
+    static validateLeaveDate(dateString) {
         if (!dateString) {
-            return { valid: false, message: '日付は必須です' };
+            return { valid: false, message: '有給取得日は明日以降を選択してください' };
         }
         
-        if (!DateUtil.isValidDate(dateString)) {
-            return { valid: false, message: '正しい日付を入力してください' };
+        const requestDate = new Date(dateString);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+        
+        if (requestDate < tomorrow) {
+            return { valid: false, message: '有給取得日は明日以降を選択してください' };
         }
         
-        // 未来日チェック
-        if (options.futureOnly && !DateUtil.isFutureDate(dateString)) {
-            return { valid: false, message: '明日以降の日付を選択してください' };
-        }
-        
-        // 過去日チェック
-        if (options.pastOnly && DateUtil.isFutureDate(dateString)) {
-            return { valid: false, message: '当日または過去日を選択してください' };
-        }
-        
-        // 営業日チェック
-        if (options.workingDayOnly && !DateUtil.isWorkingDay(dateString)) {
-            return { valid: false, message: '営業日を選択してください' };
-        }
-        
-        return { valid: true, message: '' };
+        return { valid: true };
     }
     
     /**
-     * 時刻検証
+     * 打刻修正申請日検証（設計書：当日または過去日のみ）
+     */
+    static validateAdjustmentDate(dateString) {
+        if (!dateString) {
+            return { valid: false, message: '修正対象日は当日または過去日を選択してください' };
+        }
+        
+        const targetDate = new Date(dateString);
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        
+        if (targetDate > today) {
+            return { valid: false, message: '修正対象日は当日または過去日を選択してください' };
+        }
+        
+        return { valid: true };
+    }
+    
+    /**
+     * 時刻検証（HH:MM形式、00:00-23:59）
      */
     static validateTime(timeString) {
         if (!timeString) {
-            return { valid: false, message: '時刻は必須です' };
+            return { valid: false, message: '時刻は00:00-23:59で入力してください' };
         }
         
-        const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-        if (!timePattern.test(timeString)) {
-            return { valid: false, message: '正しい時刻を入力してください（HH:MM形式）' };
+        const timeRegex = /^([01]?\d|2[0-3]):([0-5]?\d)$/;
+        if (!timeRegex.test(timeString)) {
+            return { valid: false, message: '時刻は00:00-23:59で入力してください' };
         }
         
-        return { valid: true, message: '' };
+        return { valid: true };
     }
     
     /**
-     * 年月検証
+     * 有給日数調整検証（設計書：-99～+99）
      */
-    static validateYearMonth(yearMonthString) {
-        if (!yearMonthString) {
-            return { valid: false, message: '年月は必須です' };
+    static validateAdjustmentDays(days) {
+        const numDays = parseInt(days);
+        
+        if (isNaN(numDays)) {
+            return { valid: false, message: '調整日数は-99～+99の範囲で入力してください' };
         }
         
-        if (!/^\d{4}-\d{2}$/.test(yearMonthString)) {
-            return { valid: false, message: '年月はYYYY-MM形式で入力してください' };
+        if (numDays < -99 || numDays > 99) {
+            return { valid: false, message: '調整日数は-99～+99の範囲で入力してください' };
         }
         
-        const [year, month] = yearMonthString.split('-').map(Number);
-        
-        if (year < 2020 || year > 2030) {
-            return { valid: false, message: '年は2020-2030の範囲で入力してください' };
-        }
-        
-        if (month < 1 || month > 12) {
-            return { valid: false, message: '月は01-12の範囲で入力してください' };
-        }
-        
-        return { valid: true, message: '' };
+        return { valid: true };
     }
     
     /**
-     * 数値検証
+     * 必須チェック（互換性のため）
      */
-    static validateNumber(value, options = {}) {
-        if (value === '' || value === null || value === undefined) {
-            return { valid: false, message: '数値は必須です' };
+    static required(value, fieldName) {
+        if (!value || value.trim().length === 0) {
+            return { valid: false, message: `${fieldName}は必須です` };
+        }
+        return { valid: true };
+    }
+
+    /**
+     * 文字数チェック（互換性のため）
+     */
+    static length(value, min, max, fieldName) {
+        if (!value) {
+            return { valid: true }; // 必須チェックは別途実行
         }
         
-        const num = Number(value);
+        if (value.length < min) {
+            return { valid: false, message: `${fieldName}は${min}文字以上で入力してください` };
+        }
+        
+        if (value.length > max) {
+            return { valid: false, message: `${fieldName}は${max}文字以内で入力してください` };
+        }
+        
+        return { valid: true };
+    }
+
+    /**
+     * メールアドレスチェック（互換性のため）
+     */
+    static email(email) {
+        return this.validateEmail(email);
+    }
+
+    /**
+     * 数値チェック（互換性のため）
+     */
+    static number(value, min, max, fieldName) {
+        if (!value) {
+            return { valid: true }; // 必須チェックは別途実行
+        }
+        
+        const num = parseFloat(value);
         if (isNaN(num)) {
-            return { valid: false, message: '正しい数値を入力してください' };
+            return { valid: false, message: `${fieldName}は数値で入力してください` };
         }
         
-        if (options.min !== undefined && num < options.min) {
-            return { valid: false, message: `${options.min}以上の値を入力してください` };
+        if (num < min) {
+            return { valid: false, message: `${fieldName}は${min}以上で入力してください` };
         }
         
-        if (options.max !== undefined && num > options.max) {
-            return { valid: false, message: `${options.max}以下の値を入力してください` };
+        if (num > max) {
+            return { valid: false, message: `${fieldName}は${max}以下で入力してください` };
         }
         
-        if (options.integer && !Number.isInteger(num)) {
-            return { valid: false, message: '整数を入力してください' };
-        }
-        
-        return { valid: true, message: '' };
+        return { valid: true };
     }
-    
+
     /**
-     * フォーム一括検証
+     * 日付チェック（互換性のため）
      */
-    static validateForm(formElement, rules) {
+    static date(dateString, fieldName) {
+        if (!dateString) {
+            return { valid: true }; // 必須チェックは別途実行
+        }
+        
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) {
+            return { valid: false, message: `${fieldName}は正しい日付を入力してください` };
+        }
+        
+        return { valid: true };
+    }
+
+    /**
+     * フォーム全体のバリデーション
+     */
+    static validateForm(form, rules) {
         const errors = {};
-        let isValid = true;
-        
-        for (const fieldName in rules) {
-            const field = formElement.querySelector(`[name="${fieldName}"]`);
-            if (!field) continue;
+        let hasError = false;
+
+        for (const [fieldName, validators] of Object.entries(rules)) {
+            const input = form.querySelector(`[name="${fieldName}"]`);
+            if (!input) continue;
+
+            const value = input.value;
             
-            const rule = rules[fieldName];
-            const value = field.value;
-            
-            let result = { valid: true, message: '' };
-            
-            // 必須チェック
-            if (rule.required && (!value || value.trim() === '')) {
-                result = { valid: false, message: `${rule.label || fieldName}は必須です` };
-            }
-            // カスタム検証
-            else if (rule.validator && typeof rule.validator === 'function') {
-                result = rule.validator(value);
-            }
-            
-            if (!result.valid) {
-                errors[fieldName] = result.message;
-                isValid = false;
-                
-                // エラー表示
-                field.classList.add('error');
-                const errorElement = formElement.querySelector(`#${fieldName}-error`);
-                if (errorElement) {
-                    errorElement.textContent = result.message;
-                }
-            } else {
-                // エラークリア
-                field.classList.remove('error');
-                const errorElement = formElement.querySelector(`#${fieldName}-error`);
-                if (errorElement) {
-                    errorElement.textContent = '';
-                }
-            }
-        }
-        
-        return { valid: isValid, errors };
-    }
-    
-    /**
-     * リアルタイム検証セットアップ
-     */
-    static setupRealTimeValidation(formElement, rules) {
-        for (const fieldName in rules) {
-            const field = formElement.querySelector(`[name="${fieldName}"]`);
-            if (!field) continue;
-            
-            const rule = rules[fieldName];
-            
-            // 入力時検証
-            field.addEventListener('input', () => {
-                const result = rule.validator ? rule.validator(field.value) : { valid: true, message: '' };
-                
+            for (const validator of validators) {
+                const result = validator.validator(...validator.params);
                 if (!result.valid) {
-                    field.classList.add('error');
-                    const errorElement = formElement.querySelector(`#${fieldName}-error`);
-                    if (errorElement) {
-                        errorElement.textContent = result.message;
-                    }
-                } else {
-                    field.classList.remove('error');
-                    const errorElement = formElement.querySelector(`#${fieldName}-error`);
-                    if (errorElement) {
-                        errorElement.textContent = '';
-                    }
+                    errors[fieldName] = result.message;
+                    hasError = true;
+                    break;
                 }
-            });
-            
-            // フォーカス離脱時検証
-            field.addEventListener('blur', () => {
-                if (rule.required && (!field.value || field.value.trim() === '')) {
-                    field.classList.add('error');
-                    const errorElement = formElement.querySelector(`#${fieldName}-error`);
-                    if (errorElement) {
-                        errorElement.textContent = `${rule.label || fieldName}は必須です`;
-                    }
-                }
-            });
+            }
         }
+
+        return { valid: !hasError, errors };
     }
 }
 

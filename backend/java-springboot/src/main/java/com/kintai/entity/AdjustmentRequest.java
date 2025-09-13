@@ -1,171 +1,151 @@
 package com.kintai.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * 打刻修正申請エンティティ
+ * 社員の打刻修正申請を管理するテーブル
+ */
 @Entity
-@Table(name = "adjustment_requests",
-       indexes = {
-           @Index(name = "idx_employee_target_date", columnList = "employee_id, adjustment_target_date"),
-           @Index(name = "idx_target_date", columnList = "adjustment_target_date"),
-           @Index(name = "idx_status", columnList = "adjustment_status")
-       })
-@EntityListeners(AuditingEntityListener.class)
+@Table(name = "adjustment_requests", indexes = {
+    @Index(name = "idx_employee_target_date", columnList = "employee_id, adjustment_target_date"),
+    @Index(name = "idx_target_date", columnList = "adjustment_target_date"),
+    @Index(name = "idx_status", columnList = "adjustment_status")
+})
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AdjustmentRequest {
-    
+
+    /**
+     * 修正申請ID（主キー）
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "adjustment_request_id")
+    @Column(name = "adjustment_request_id", columnDefinition = "BIGINT")
     private Long adjustmentRequestId;
-    
-    @NotNull
-    @Column(name = "employee_id", nullable = false)
+
+    /**
+     * 申請者社員ID（外部キー）
+     */
+    @Column(name = "employee_id", nullable = false, columnDefinition = "BIGINT")
     private Long employeeId;
-    
-    @NotNull
-    @Column(name = "adjustment_target_date", nullable = false)
+
+    /**
+     * 対象日
+     */
+    @Column(name = "adjustment_target_date", nullable = false, columnDefinition = "DATE")
     private LocalDate adjustmentTargetDate;
-    
-    @Column(name = "original_clock_in_time")
+
+    /**
+     * 元出勤時刻
+     */
+    @Column(name = "original_clock_in_time", columnDefinition = "DATETIME")
     private LocalDateTime originalClockInTime;
-    
-    @Column(name = "original_clock_out_time")
+
+    /**
+     * 元退勤時刻
+     */
+    @Column(name = "original_clock_out_time", columnDefinition = "DATETIME")
     private LocalDateTime originalClockOutTime;
-    
-    @Column(name = "adjustment_requested_time_in")
+
+    /**
+     * 申請：出勤時刻
+     */
+    @Column(name = "adjustment_requested_time_in", columnDefinition = "DATETIME")
     private LocalDateTime adjustmentRequestedTimeIn;
-    
-    @Column(name = "adjustment_requested_time_out")
+
+    /**
+     * 申請：退勤時刻
+     */
+    @Column(name = "adjustment_requested_time_out", columnDefinition = "DATETIME")
     private LocalDateTime adjustmentRequestedTimeOut;
-    
-    @NotBlank
+
+    /**
+     * 修正理由
+     */
     @Column(name = "adjustment_reason", length = 200, nullable = false)
     private String adjustmentReason;
-    
-    @NotNull
+
+    /**
+     * 修正申請状態
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "adjustment_status", nullable = false)
-    private AdjustmentStatus adjustmentStatus = AdjustmentStatus.未処理;
-    
-    @Column(name = "approved_at")
+    @Column(name = "adjustment_status", nullable = false, columnDefinition = "ENUM('未処理','承認','却下') DEFAULT '未処理'")
+    private AdjustmentStatus adjustmentStatus;
+
+    /**
+     * 承認日時
+     */
+    @Column(name = "approved_at", columnDefinition = "DATETIME")
     private LocalDateTime approvedAt;
-    
-    @Column(name = "approved_by_employee_id")
+
+    /**
+     * 承認者社員ID（外部キー）
+     */
+    @Column(name = "approved_by_employee_id", columnDefinition = "BIGINT")
     private Long approvedByEmployeeId;
-    
+
+    /**
+     * 却下理由
+     */
     @Column(name = "rejection_reason", length = 200)
     private String rejectionReason;
-    
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+
+    /**
+     * 作成日時
+     */
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;
-    
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+
+    /**
+     * 更新日時
+     */
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     private LocalDateTime updatedAt;
-    
-    // Foreign key relationships
+
+    /**
+     * 申請者との関連（外部キー制約）
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", insertable = false, updatable = false)
     private Employee employee;
-    
+
+    /**
+     * 承認者との関連（外部キー制約）
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by_employee_id", insertable = false, updatable = false)
     private Employee approvedBy;
-    
-    // Enums - 設計書通りの日本語ステータス
-    public enum AdjustmentStatus {
-        未処理("未処理"), 承認("承認"), 却下("却下");
-        
-        private final String value;
-        AdjustmentStatus(String value) { this.value = value; }
-        public String getValue() { return value; }
-    }
-    
 
-    public AdjustmentRequest() {}
-    
-    public AdjustmentRequest(Long employeeId, LocalDate adjustmentTargetDate, String adjustmentReason) {
-        this.employeeId = employeeId;
-        this.adjustmentTargetDate = adjustmentTargetDate;
-        this.adjustmentReason = adjustmentReason;
-    }
-    
-  
-    public Long getAdjustmentRequestId() { return adjustmentRequestId; }
-    public void setAdjustmentRequestId(Long adjustmentRequestId) { this.adjustmentRequestId = adjustmentRequestId; }
-    
-    public Long getEmployeeId() { return employeeId; }
-    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
-    
-    public LocalDate getAdjustmentTargetDate() { return adjustmentTargetDate; }
-    public void setAdjustmentTargetDate(LocalDate adjustmentTargetDate) { this.adjustmentTargetDate = adjustmentTargetDate; }
-    
-    public LocalDateTime getOriginalClockInTime() { return originalClockInTime; }
-    public void setOriginalClockInTime(LocalDateTime originalClockInTime) { this.originalClockInTime = originalClockInTime; }
-    
-    public LocalDateTime getOriginalClockOutTime() { return originalClockOutTime; }
-    public void setOriginalClockOutTime(LocalDateTime originalClockOutTime) { this.originalClockOutTime = originalClockOutTime; }
-    
-    public LocalDateTime getAdjustmentRequestedTimeIn() { return adjustmentRequestedTimeIn; }
-    public void setAdjustmentRequestedTimeIn(LocalDateTime adjustmentRequestedTimeIn) { this.adjustmentRequestedTimeIn = adjustmentRequestedTimeIn; }
-    
-    public LocalDateTime getAdjustmentRequestedTimeOut() { return adjustmentRequestedTimeOut; }
-    public void setAdjustmentRequestedTimeOut(LocalDateTime adjustmentRequestedTimeOut) { this.adjustmentRequestedTimeOut = adjustmentRequestedTimeOut; }
-    
-    public String getAdjustmentReason() { return adjustmentReason; }
-    public void setAdjustmentReason(String adjustmentReason) { this.adjustmentReason = adjustmentReason; }
-    
-    public AdjustmentStatus getAdjustmentStatus() { return adjustmentStatus; }
-    public void setAdjustmentStatus(AdjustmentStatus adjustmentStatus) { this.adjustmentStatus = adjustmentStatus; }
-    
-    public LocalDateTime getApprovedAt() { return approvedAt; }
-    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
-    
-    public Long getApprovedByEmployeeId() { return approvedByEmployeeId; }
-    public void setApprovedByEmployeeId(Long approvedByEmployeeId) { this.approvedByEmployeeId = approvedByEmployeeId; }
-    
-    public String getRejectionReason() { return rejectionReason; }
-    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
-    
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    
-    public Employee getEmployee() { return employee; }
-    public void setEmployee(Employee employee) { this.employee = employee; }
-    
-    public Employee getApprovedBy() { return approvedBy; }
-    public void setApprovedBy(Employee approvedBy) { this.approvedBy = approvedBy; }
-    
-    // Helper methods
-    public boolean isPending() { return adjustmentStatus == AdjustmentStatus.未処理; }
-    public boolean isApproved() { return adjustmentStatus == AdjustmentStatus.承認; }
-    public boolean isRejected() { return adjustmentStatus == AdjustmentStatus.却下; }
-    
-    public void approve(Long approverId) {
-        this.adjustmentStatus = AdjustmentStatus.承認;
-        this.approvedByEmployeeId = approverId;
-        this.approvedAt = LocalDateTime.now();
-    }
-    
-    public void reject(Long approverId, String reason) {
-        this.adjustmentStatus = AdjustmentStatus.却下;
-        this.approvedByEmployeeId = approverId;
-        this.rejectionReason = reason;
-        this.approvedAt = LocalDateTime.now();
-    }
-    
-    public boolean hasValidTimeAdjustment() {
-        return adjustmentRequestedTimeIn != null || adjustmentRequestedTimeOut != null;
+    /**
+     * 修正申請ステータス列挙型
+     */
+    public enum AdjustmentStatus {
+        PENDING("未処理"),
+        APPROVED("承認"),
+        REJECTED("却下");
+
+        private final String value;
+
+        AdjustmentStatus(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
     }
 }

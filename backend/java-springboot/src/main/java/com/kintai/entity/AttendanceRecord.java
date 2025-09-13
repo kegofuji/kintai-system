@@ -1,177 +1,164 @@
 package com.kintai.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotNull;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * 勤怠記録エンティティ
+ * 社員の勤怠記録を管理するテーブル
+ */
 @Entity
-@Table(name = "attendance_records", 
-       indexes = {
-           @Index(name = "idx_employee_date", columnList = "employee_id, attendance_date"),
-           @Index(name = "idx_attendance_date", columnList = "attendance_date")
-       })
-@EntityListeners(AuditingEntityListener.class)
+@Table(name = "attendance_records", indexes = {
+    @Index(name = "idx_employee_date", columnList = "employee_id, attendance_date"),
+    @Index(name = "idx_attendance_date", columnList = "attendance_date")
+})
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AttendanceRecord {
-    
+
+    /**
+     * 勤怠ID（主キー）
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "attendance_id")
+    @Column(name = "attendance_id", columnDefinition = "BIGINT")
     private Long attendanceId;
-    
-    @NotNull
-    @Column(name = "employee_id", nullable = false)
+
+    /**
+     * 社員ID（外部キー）
+     */
+    @Column(name = "employee_id", nullable = false, columnDefinition = "BIGINT")
     private Long employeeId;
-    
-    @NotNull
-    @Column(name = "attendance_date", nullable = false)
+
+    /**
+     * 勤怠日
+     */
+    @Column(name = "attendance_date", nullable = false, columnDefinition = "DATE")
     private LocalDate attendanceDate;
-    
-    @Column(name = "clock_in_time")
+
+    /**
+     * 出勤打刻
+     */
+    @Column(name = "clock_in_time", columnDefinition = "DATETIME")
     private LocalDateTime clockInTime;
-    
-    @Column(name = "clock_out_time")
+
+    /**
+     * 退勤打刻
+     */
+    @Column(name = "clock_out_time", columnDefinition = "DATETIME")
     private LocalDateTime clockOutTime;
-    
-    @NotNull
-    @Column(name = "late_minutes", nullable = false)
-    private Integer lateMinutes = 0;
-    
-    @NotNull
-    @Column(name = "early_leave_minutes", nullable = false)
-    private Integer earlyLeaveMinutes = 0;
-    
-    @NotNull
-    @Column(name = "overtime_minutes", nullable = false)
-    private Integer overtimeMinutes = 0;
-    
-    @NotNull
-    @Column(name = "night_shift_minutes", nullable = false)
-    private Integer nightShiftMinutes = 0;
-    
-    @NotNull
+
+    /**
+     * 遅刻分（分単位）
+     */
+    @Column(name = "late_minutes", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer lateMinutes;
+
+    /**
+     * 早退分（分単位）
+     */
+    @Column(name = "early_leave_minutes", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer earlyLeaveMinutes;
+
+    /**
+     * 残業分（分単位）
+     */
+    @Column(name = "overtime_minutes", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer overtimeMinutes;
+
+    /**
+     * 深夜分（分単位）（22:00～翌5:00）
+     */
+    @Column(name = "night_shift_minutes", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer nightShiftMinutes;
+
+    /**
+     * 勤怠ステータス
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "attendance_status", nullable = false)
-    private AttendanceStatus attendanceStatus = AttendanceStatus.NORMAL;
-    
-    @NotNull
+    @Column(name = "attendance_status", nullable = false, columnDefinition = "ENUM('normal','paid_leave','absent') DEFAULT 'normal'")
+    private AttendanceStatus attendanceStatus;
+
+    /**
+     * 月末申請ステータス
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "submission_status", nullable = false)
-    private SubmissionStatus submissionStatus = SubmissionStatus.未提出;
-    
-    @NotNull
-    @Column(name = "attendance_fixed_flag", columnDefinition = "TINYINT(1)", nullable = false)
-    private Boolean attendanceFixedFlag = false;
-    
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "submission_status", nullable = false, columnDefinition = "ENUM('未提出','申請済','承認','却下') DEFAULT '未提出'")
+    private SubmissionStatus submissionStatus;
+
+    /**
+     * 勤怠確定フラグ（0：未確定、1：確定済）
+     */
+    @Column(name = "attendance_fixed_flag", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+    private Boolean attendanceFixedFlag;
+
+    /**
+     * 作成日時
+     */
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime createdAt;
-    
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+
+    /**
+     * 更新日時
+     */
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
     private LocalDateTime updatedAt;
-    
- 
+
+    /**
+     * 社員との関連（外部キー制約）
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", insertable = false, updatable = false)
     private Employee employee;
-    
-    // Enums - 設計書通りの値を使用
-    public enum AttendanceStatus {
-        NORMAL("normal"), PAID_LEAVE("paid_leave"), ABSENT("absent");
-        
-        private final String value;
-        AttendanceStatus(String value) { this.value = value; }
-        public String getValue() { return value; }
-    }
-    
-    public enum SubmissionStatus {
-        未提出("未提出"), 申請済("申請済"), 承認("承認"), 却下("却下");
-        
-        private final String value;
-        SubmissionStatus(String value) { this.value = value; }
-        public String getValue() { return value; }
-    }
-    
 
-    public AttendanceRecord() {}
-    
-    public AttendanceRecord(Long employeeId, LocalDate attendanceDate) {
-        this.employeeId = employeeId;
-        this.attendanceDate = attendanceDate;
-    }
-    
-    public Long getAttendanceId() { return attendanceId; }
-    public void setAttendanceId(Long attendanceId) { this.attendanceId = attendanceId; }
-    
-    public Long getEmployeeId() { return employeeId; }
-    public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
-    
-    public LocalDate getAttendanceDate() { return attendanceDate; }
-    public void setAttendanceDate(LocalDate attendanceDate) { this.attendanceDate = attendanceDate; }
-    
-    public LocalDateTime getClockInTime() { return clockInTime; }
-    public void setClockInTime(LocalDateTime clockInTime) { this.clockInTime = clockInTime; }
-    
-    public LocalDateTime getClockOutTime() { return clockOutTime; }
-    public void setClockOutTime(LocalDateTime clockOutTime) { this.clockOutTime = clockOutTime; }
-    
-    public Integer getLateMinutes() { return lateMinutes; }
-    public void setLateMinutes(Integer lateMinutes) { this.lateMinutes = lateMinutes; }
-    
-    public Integer getEarlyLeaveMinutes() { return earlyLeaveMinutes; }
-    public void setEarlyLeaveMinutes(Integer earlyLeaveMinutes) { this.earlyLeaveMinutes = earlyLeaveMinutes; }
-    
-    public Integer getOvertimeMinutes() { return overtimeMinutes; }
-    public void setOvertimeMinutes(Integer overtimeMinutes) { this.overtimeMinutes = overtimeMinutes; }
-    
-    public Integer getNightShiftMinutes() { return nightShiftMinutes; }
-    public void setNightShiftMinutes(Integer nightShiftMinutes) { this.nightShiftMinutes = nightShiftMinutes; }
-    
-    public AttendanceStatus getAttendanceStatus() { return attendanceStatus; }
-    public void setAttendanceStatus(AttendanceStatus attendanceStatus) { this.attendanceStatus = attendanceStatus; }
-    
-    public SubmissionStatus getSubmissionStatus() { return submissionStatus; }
-    public void setSubmissionStatus(SubmissionStatus submissionStatus) { this.submissionStatus = submissionStatus; }
-    
-    public Boolean getAttendanceFixedFlag() { return attendanceFixedFlag; }
-    public void setAttendanceFixedFlag(Boolean attendanceFixedFlag) { this.attendanceFixedFlag = attendanceFixedFlag; }
-    
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    
-    public Employee getEmployee() { return employee; }
-    public void setEmployee(Employee employee) { this.employee = employee; }
-    
-    // Helper methods
-    public boolean hasClockInTime() { return clockInTime != null; }
-    public boolean hasClockOutTime() { return clockOutTime != null; }
-    public boolean isCompleteAttendance() { return hasClockInTime() && hasClockOutTime(); }
-    public boolean isFixed() { return attendanceFixedFlag != null && attendanceFixedFlag; }
-    public boolean canModify() { return !isFixed(); }
-    
     /**
-     * 実働時間計算（分単位）
-     * 昼休憩（12:00-13:00）は自動控除
+     * 勤怠ステータス列挙型
      */
-    public Integer getTotalWorkingMinutes() {
-        if (!isCompleteAttendance()) return 0;
-        
-        long totalMinutes = java.time.Duration.between(clockInTime, clockOutTime).toMinutes();
-        
-        // 昼休憩時間控除（12:00-13:00にかかる場合）
-        if (clockInTime.toLocalTime().isBefore(java.time.LocalTime.of(13, 0)) &&
-            clockOutTime.toLocalTime().isAfter(java.time.LocalTime.of(12, 0))) {
-            totalMinutes -= 60; // 60分控除
+    public enum AttendanceStatus {
+        NORMAL("normal"),
+        PAID_LEAVE("paid_leave"),
+        ABSENT("absent");
+
+        private final String value;
+
+        AttendanceStatus(String value) {
+            this.value = value;
         }
-        
-        return Math.max(0, (int) totalMinutes);
+
+        public String getValue() {
+            return value;
+        }
+    }
+
+    /**
+     * 月末申請ステータス列挙型
+     */
+    public enum SubmissionStatus {
+        NOT_SUBMITTED("未提出"),
+        SUBMITTED("申請済"),
+        APPROVED("承認"),
+        REJECTED("却下");
+
+        private final String value;
+
+        SubmissionStatus(String value) {
+            this.value = value;
+        }
+
+        public String getValue() {
+            return value;
+        }
     }
 }

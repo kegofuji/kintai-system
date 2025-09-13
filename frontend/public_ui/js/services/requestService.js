@@ -1,196 +1,151 @@
-/**
- * 申請サービス（有給・打刻修正申請管理）
- */
-
+// 申請サービス（設計書のAPI仕様完全準拠）
 class RequestService {
     constructor() {
-        this.baseUrl = CONFIG.API_BASE_URL;
+        this.baseUrl = CONFIG.getApiBaseUrl();
     }
-    
+
     /**
-     * 有給申請
+     * 共通API呼び出し処理
+     * @param {string} endpoint - エンドポイント
+     * @param {Object} options - オプション
+     * @returns {Promise<Object>} API応答
      */
-    async submitLeaveRequest(employeeId, leaveDate, reason) {
+    async apiCall(endpoint, options = {}) {
         try {
-            const response = await fetch(`${this.baseUrl}/requests/leave`, {
-                method: 'POST',
+            const url = `${this.baseUrl}${endpoint}`;
+            const token = localStorage.getItem('kintai_session_token');
+            
+            const defaultOptions = {
                 headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    employeeId,
-                    leaveDate,
-                    reason
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '有給申請に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('有給申請エラー:', error);
-            throw error;
-        }
-    }
-    
-    /**
-     * 打刻修正申請
-     */
-    async submitAdjustmentRequest(employeeId, targetDate, correctedClockInTime, correctedClockOutTime, reason) {
-        try {
-            const response = await fetch(`${this.baseUrl}/requests/adjustment`, {
-                method: 'POST',
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                }
+            };
+
+            const response = await fetch(url, {
+                ...defaultOptions,
+                ...options,
                 headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    employeeId,
-                    targetDate,
-                    correctedClockInTime,
-                    correctedClockOutTime,
-                    reason
-                })
+                    ...defaultOptions.headers,
+                    ...options.headers
+                }
             });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '打刻修正申請に失敗しました');
+
+            const data = await response.json();
+
+            if (response.ok) {
+                return {
+                    success: true,
+                    data: data,
+                    message: data.message || 'Success'
+                };
+            } else {
+                return {
+                    success: false,
+                    message: data.message || `HTTP Error: ${response.status}`,
+                    error: data.error || 'Unknown error'
+                };
             }
-            
-            return result;
         } catch (error) {
-            console.error('打刻修正申請エラー:', error);
-            throw error;
+            console.error('API call error:', error);
+            return {
+                success: false,
+                message: 'ネットワークエラーが発生しました',
+                error: error.message
+            };
         }
     }
-    
+
     /**
-     * 申請履歴取得
+     * 休暇申請一覧取得（GET /api/requests/leave）
+     * @param {Object} params - 検索パラメータ
+     * @returns {Promise<Object>} 申請一覧
      */
-    async getMyRequestHistory() {
-        try {
-            const response = await fetch(`${this.baseUrl}/requests/my-history`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '申請履歴の取得に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('申請履歴取得エラー:', error);
-            throw error;
-        }
+    async getLeaveRequests(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return await this.apiCall(`/requests/leave?${queryString}`, {
+            method: 'GET'
+        });
     }
-    
+
     /**
-     * 申請一覧取得（管理者用）
+     * 勤怠修正申請一覧取得（GET /api/requests/adjustment）
+     * @param {Object} params - 検索パラメータ
+     * @returns {Promise<Object>} 申請一覧
      */
-    async getRequestList(params = {}) {
-        try {
-            const queryParams = new URLSearchParams();
-            
-            if (params.requestType) {
-                queryParams.append('requestType', params.requestType);
-            }
-            if (params.status) {
-                queryParams.append('status', params.status);
-            }
-            if (params.employeeId) {
-                queryParams.append('employeeId', params.employeeId);
-            }
-            if (params.employeeName) {
-                queryParams.append('employeeName', params.employeeName);
-            }
-            
-            const response = await fetch(`${this.baseUrl}/requests/list?${queryParams}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '申請一覧の取得に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('申請一覧取得エラー:', error);
-            throw error;
-        }
+    async getAdjustmentRequests(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return await this.apiCall(`/requests/adjustment?${queryString}`, {
+            method: 'GET'
+        });
     }
-    
+
     /**
-     * 申請承認
+     * 申請詳細取得（GET /api/requests/{type}/{id}）
+     * @param {string} requestId - 申請ID
+     * @param {string} requestType - 申請タイプ
+     * @returns {Promise<Object>} 申請詳細
      */
-    async approveRequest(requestId, requestType, approverId, comment = '') {
-        try {
-            const response = await fetch(`${this.baseUrl}/requests/approve/${requestId}?requestType=${requestType}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    approverId,
-                    comment
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '申請の承認に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('申請承認エラー:', error);
-            throw error;
-        }
+    async getRequestDetail(requestId, requestType) {
+        return await this.apiCall(`/requests/${requestType}/${requestId}`, {
+            method: 'GET'
+        });
     }
-    
+
     /**
-     * 申請却下
+     * 申請更新（PUT /api/requests/{type}/{id}）
+     * @param {string} requestId - 申請ID
+     * @param {string} requestType - 申請タイプ
+     * @param {Object} updateData - 更新データ
+     * @returns {Promise<Object>} 更新結果
      */
-    async rejectRequest(requestId, requestType, approverId, rejectionReason) {
-        try {
-            const response = await fetch(`${this.baseUrl}/requests/reject/${requestId}?requestType=${requestType}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    approverId,
-                    rejectionReason
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.message || '申請の却下に失敗しました');
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('申請却下エラー:', error);
-            throw error;
-        }
+    async updateRequest(requestId, requestType, updateData) {
+        return await this.apiCall(`/requests/${requestType}/${requestId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updateData)
+        });
+    }
+
+    /**
+     * 申請削除（DELETE /api/requests/{type}/{id}）
+     * @param {string} requestId - 申請ID
+     * @param {string} requestType - 申請タイプ
+     * @returns {Promise<Object>} 削除結果
+     */
+    async deleteRequest(requestId, requestType) {
+        return await this.apiCall(`/requests/${requestType}/${requestId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    /**
+     * 申請承認（POST /api/requests/{type}/{id}/approve）
+     * @param {string} requestId - 申請ID
+     * @param {string} requestType - 申請タイプ
+     * @param {string} comment - コメント
+     * @returns {Promise<Object>} 承認結果
+     */
+    async approveRequest(requestId, requestType, comment = '') {
+        return await this.apiCall(`/requests/${requestType}/${requestId}/approve`, {
+            method: 'POST',
+            body: JSON.stringify({ comment })
+        });
+    }
+
+    /**
+     * 申請却下（POST /api/requests/{type}/{id}/reject）
+     * @param {string} requestId - 申請ID
+     * @param {string} requestType - 申請タイプ
+     * @param {string} comment - 却下理由
+     * @returns {Promise<Object>} 却下結果
+     */
+    async rejectRequest(requestId, requestType, comment = '') {
+        return await this.apiCall(`/requests/${requestType}/${requestId}/reject`, {
+            method: 'POST',
+            body: JSON.stringify({ comment })
+        });
     }
 }
 
+// グローバルに公開
 window.RequestService = RequestService;
